@@ -1,6 +1,7 @@
 //! Local HTTP service. The core session and decoder modules are independent of it.
 
 mod api;
+mod assets;
 mod service;
 
 use std::{
@@ -61,6 +62,8 @@ async fn serve(config: Config) -> io::Result<()> {
 
 fn router(service: Arc<Service>) -> Router {
     Router::new()
+        .route("/", get(assets::index))
+        .route("/assets/{name}", get(assets::asset))
         .route("/api/v1/interfaces", get(api::interfaces))
         .route("/api/v1/sessions", get(api::sessions).post(api::start))
         .route("/api/v1/sessions/{id}", delete(api::remove))

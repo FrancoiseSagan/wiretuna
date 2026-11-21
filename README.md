@@ -28,3 +28,16 @@ Stop with Ctrl-C or set a packet limit with `--count`. The command reports
 captured packets and byte counts along with the raw libpcap counters. The
 optional `--snaplen` and `--buffer-size` values are in bytes. Promiscuous mode
 is disabled.
+
+## Local Web interface
+
+Build the Web feature and start Wiretuna with an existing capture file:
+
+```sh
+cargo run --locked --features web -- serve --input capture.pcap
+```
+
+Open `http://127.0.0.1:8765` in a browser. Use `--port` to change the loopback
+port. The packet workspace supports display filters such as
+`tcp && ip.src == 192.0.2.1`, field inspection and a paginated hex view.
+The interface is embedded in the binary and does not need a frontend build.

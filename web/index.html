@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Wiretuna · 网络包分析</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <script type="module" src="/assets/main.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <aside class="rail" aria-label="捕获会话">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+        <span>Wiretuna</span>
+      </div>
+      <div class="rail-section">
+        <h2>捕获</h2>
+        <form id="capture-form" class="capture-form">
+          <label for="interface">网络接口</label>
+          <select id="interface" name="interface" required></select>
+          <label for="capture-filter">捕获过滤器</label>
+          <input id="capture-filter" name="filter" placeholder="udp port 53" maxlength="4096" autocomplete="off" spellcheck="false">
+          <details class="capture-options">
+            <summary>捕获选项</summary>
+            <label for="snaplen">每包保留字节</label>
+            <input id="snaplen" name="snaplen" type="number" min="1" max="1048576" value="65535" required>
+          </details>
+          <button class="primary" id="start" type="submit">开始捕获</button>
+        </form>
+        <div class="session-actions">
+          <button id="stop" type="button" disabled>停止</button>
+          <button id="clear" type="button" disabled>清除会话</button>
+        </div>
+        <p id="capture-note" class="muted"></p>
+      </div>
+      <div class="rail-section metrics" aria-label="会话统计">
+        <h2>会话统计</h2>
+        <dl>
+          <div><dt>已处理包</dt><dd id="seen">0</dd></div>
+          <div><dt>保留包</dt><dd id="retained">0</dd></div>
+          <div><dt>队列丢弃</dt><dd id="dropped">0</dd></div>
+          <div><dt>后端丢弃</dt><dd id="backend-dropped">—</dd></div>
+          <div><dt>窗口淘汰</dt><dd id="evicted">0</dd></div>
+        </dl>
+      </div>
+      <div class="rail-footer"><span class="indicator" id="connection-indicator"></span><span id="connection">正在连接</span></div>
+    </aside>
+    <main class="workspace">
+      <header class="topbar">
+        <div>
+          <h1 id="workspace-title">数据包</h1>
+          <div class="session-caption" id="session-label">等待会话</div>
+        </div>
+        <span class="state" id="phase" data-phase="idle">空闲</span>
+      </header>
+      <div class="notice" id="notice" role="alert" hidden></div>
+      <div id="packet-workspace" class="packet-workspace">
+        <section class="panel packet-panel" aria-label="数据包列表">
+          <div class="toolbar">
+            <form id="display-form" class="filter-form">
+              <label for="display-filter">显示过滤器</label>
+              <input id="display-filter" placeholder="tcp && ip.src == 192.0.2.1" maxlength="512" autocomplete="off" spellcheck="false">
+              <button type="submit">应用</button>
+              <button type="button" id="reset-filter" class="plain">重置</button>
+            </form>
+            <label class="toggle"><input id="follow" type="checkbox" checked> 跟随最新</label>
+          </div>
+          <div id="packet-scroll" class="packet-scroll" tabindex="0">
+            <table>
+              <colgroup><col class="c-id"><col class="c-time"><col class="c-end"><col class="c-end"><col class="c-proto"><col class="c-len"><col class="c-info"></colgroup>
+              <thead><tr><th scope="col">编号</th><th scope="col">时间 UTC</th><th scope="col">来源</th><th scope="col">目的</th><th scope="col">协议</th><th scope="col">长度</th><th scope="col">信息</th></tr></thead>
+              <tbody id="packet-rows"></tbody>
+            </table>
+            <div id="packet-empty" class="empty"><strong>没有可显示的数据包</strong><span id="packet-empty-message">启动捕获后，数据包会显示在这里。</span></div>
+          </div>
+          <div class="panel-footer">
+            <span id="page-summary">0 条记录</span>
+            <div class="button-group"><button type="button" id="older" disabled>上一页</button><button type="button" id="newer" disabled>下一页</button></div>
+          </div>
+        </section>
+        <div class="inspection">
+          <section class="panel detail-panel" aria-labelledby="detail-title">
+            <div class="panel-heading"><h2 id="detail-title">协议详情</h2><span id="selected-id" class="muted mono"></span></div>
+            <div id="protocol-detail" class="detail-body empty">选择一个数据包以查看字段。</div>
+          </section>
+          <section class="panel detail-panel" aria-labelledby="hex-title">
+            <div class="panel-heading"><h2 id="hex-title">原始字节</h2><span id="byte-count" class="muted mono"></span></div>
+            <div class="hex-scroll"><pre id="hex" class="hex"><span class="muted">选择数据包后显示。</span></pre></div>
+            <div class="panel-footer"><span id="hex-range"></span><div class="button-group"><button id="hex-prev" disabled>上一段</button><button id="hex-next" disabled>下一段</button></div></div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
