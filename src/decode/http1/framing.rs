@@ -1,5 +1,3 @@
-const MAX_PREVIEW: usize = 256;
-
 pub(super) enum Framing {
     None,
     Fixed(usize),
@@ -31,12 +29,17 @@ impl Body {
         }
     }
 
-    fn take(data: &[u8], limit: usize, issue: Option<&'static str>) -> Self {
-        let consumed = limit.min(data.len());
+    fn take(
+        data: &[u8],
+        declared: usize,
+        preview_limit: usize,
+        issue: Option<&'static str>,
+    ) -> Self {
+        let consumed = declared.min(data.len());
         Self {
             consumed,
             bytes: consumed,
-            preview: data[..consumed.min(MAX_PREVIEW)].to_vec(),
+            preview: data[..consumed.min(preview_limit)].to_vec(),
             issue,
         }
     }
@@ -85,25 +88,27 @@ impl Framing {
         }
     }
 
-    pub fn read(self, bytes: &[u8], finished: bool) -> Body {
+    pub fn read(self, bytes: &[u8], finished: bool, preview_limit: usize) -> Body {
         match self {
             Self::None => Body::empty(),
             Self::Fixed(length) => Body::take(
                 bytes,
                 length,
+                preview_limit,
                 (length > bytes.len()).then_some("Body is incomplete."),
             ),
-            Self::Chunked => chunks(bytes),
+            Self::Chunked => chunks(bytes, preview_limit),
             Self::UntilClose => Body::take(
                 bytes,
                 bytes.len(),
+                preview_limit,
                 (!finished).then_some("Connection close was not observed."),
             ),
         }
     }
 }
 
-fn chunks(bytes: &[u8]) -> Body {
+fn chunks(bytes: &[u8], preview_limit: usize) -> Body {
     let mut body = Body::empty();
     for _ in 0..4096 {
         let Ok(httparse::Status::Complete((prefix, size))) =
@@ -129,7 +134,7 @@ fn chunks(bytes: &[u8]) -> Body {
         let len = usize::try_from(size).unwrap_or(usize::MAX);
         let captured = len.min(remaining.len());
         body.bytes += captured;
-        let preview = captured.min(MAX_PREVIEW - body.preview.len());
+        let preview = captured.min(preview_limit - body.preview.len());
         body.preview.extend_from_slice(&remaining[..preview]);
         body.consumed += captured;
         if captured != len || !remaining[len..].starts_with(b"\r\n") {

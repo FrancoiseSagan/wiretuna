@@ -250,6 +250,28 @@ pub(super) async fn message(
     Ok(Json(detail))
 }
 
+pub(super) async fn message_body(
+    State(service): State<Arc<Service>>,
+    Path((id, flow_id, message_id)): Path<(u64, u64, String)>,
+) -> Result<Vec<u8>, ApiError> {
+    let (direction, offset) = message_id
+        .split_once('-')
+        .and_then(|(direction, offset)| Some((direction.parse().ok()?, offset.parse().ok()?)))
+        .ok_or_else(|| ApiError::bad("Invalid HTTP message identifier."))?;
+    let active = service.get(id)?;
+    let (flow, streams) = active
+        .session
+        .streams(flow_id)
+        .ok_or_else(|| flow_missing(&active, flow_id))?;
+    http1::read_body(&flow, &streams, direction, offset).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            "message_not_found",
+            "No such HTTP message.",
+        )
+    })
+}
+
 fn snapshot(
     service: &Service,
     session_id: u64,

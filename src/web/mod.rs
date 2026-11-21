@@ -111,6 +111,10 @@ fn router(service: Arc<Service>) -> Router {
             "/api/v1/sessions/{id}/flows/{flow_id}/http/{message_id}",
             get(flows::message),
         )
+        .route(
+            "/api/v1/sessions/{id}/flows/{flow_id}/http/{message_id}/body",
+            get(flows::message_body),
+        )
         .layer(DefaultBodyLimit::max(8192))
         .layer(middleware::from_fn_with_state(Arc::clone(&service), access))
         .with_state(service)

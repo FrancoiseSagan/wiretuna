@@ -15,6 +15,7 @@ pub(super) async fn asset(Path(name): Path<String>) -> Response {
         "api.js" => (script, include_str!("../../web/modules/api.js")),
         "details.js" => (script, include_str!("../../web/modules/details.js")),
         "dom.js" => (script, include_str!("../../web/modules/dom.js")),
+        "http-body.js" => (script, include_str!("../../web/modules/http-body.js")),
         "flow-http.js" => (script, include_str!("../../web/modules/flow-http.js")),
         "flow-stream.js" => (script, include_str!("../../web/modules/flow-stream.js")),
         "flows.js" => (script, include_str!("../../web/modules/flows.js")),

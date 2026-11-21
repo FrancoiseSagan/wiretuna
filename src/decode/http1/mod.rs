@@ -5,6 +5,7 @@ mod framing;
 use crate::flow::{Flow, StreamSnapshot};
 use framing::{Body, Framing};
 
+const MAX_PREVIEW_BYTES: usize = 256;
 const MAX_HEADERS: usize = 64;
 const MAX_HEAD_BYTES: usize = 32 * 1024;
 const MAX_TRANSACTIONS: usize = 128;
@@ -44,6 +45,29 @@ pub struct Report {
 }
 
 pub fn analyze(flow: &Flow, streams: &[StreamSnapshot; 2]) -> Report {
+    analyze_selected(flow, streams, None)
+}
+
+/// Reads the selected body within the retained TCP prefix, after HTTP framing.
+pub fn read_body(
+    flow: &Flow,
+    streams: &[StreamSnapshot; 2],
+    direction: usize,
+    offset: u64,
+) -> Option<Vec<u8>> {
+    analyze_selected(flow, streams, Some((direction, offset)))
+        .transactions
+        .into_iter()
+        .flat_map(|transaction| transaction.request.into_iter().chain(transaction.responses))
+        .find(|message| message.direction == direction && message.offset == offset)
+        .map(|message| message.preview)
+}
+
+fn analyze_selected(
+    flow: &Flow,
+    streams: &[StreamSnapshot; 2],
+    body_target: Option<(usize, u64)>,
+) -> Report {
     let prefixes = streams.each_ref().map(Prefix::new);
     let client = if prefixes[0].looks_like_request() {
         Some(0)
@@ -69,8 +93,8 @@ pub fn analyze(flow: &Flow, streams: &[StreamSnapshot; 2]) -> Report {
             Some("Capture begins mid-connection. HTTP pairing is based on the visible messages.");
     }
 
-    let mut requests = Reader::new(client, &prefixes[client]);
-    let mut responses = Reader::new(server, &prefixes[server]);
+    let mut requests = Reader::new(client, &prefixes[client], body_target);
+    let mut responses = Reader::new(server, &prefixes[server], body_target);
     while report.transactions.len() < MAX_TRANSACTIONS {
         let Some(request) = requests.read(Kind::Request) else {
             break;
@@ -177,14 +201,16 @@ struct Reader<'a> {
     direction: usize,
     prefix: &'a Prefix,
     position: usize,
+    body_target: Option<(usize, u64)>,
 }
 
 impl<'a> Reader<'a> {
-    fn new(direction: usize, prefix: &'a Prefix) -> Self {
+    fn new(direction: usize, prefix: &'a Prefix, body_target: Option<(usize, u64)>) -> Self {
         Self {
             direction,
             prefix,
             position: 0,
+            body_target,
         }
     }
 
@@ -235,7 +261,14 @@ impl<'a> Reader<'a> {
                 Body::empty()
             }
             _ => match Framing::from_headers(headers, matches!(kind, Kind::Request)) {
-                Ok(framing) => framing.read(bytes, self.prefix.finished),
+                Ok(framing) => {
+                    let limit = if self.body_target == Some((self.direction, start as u64)) {
+                        bytes.len()
+                    } else {
+                        MAX_PREVIEW_BYTES
+                    };
+                    framing.read(bytes, self.prefix.finished, limit)
+                }
                 Err(issue) => Body::failed(issue),
             },
         };
@@ -347,6 +380,30 @@ mod tests {
         assert_eq!(first.responses[1].preview, b"abc");
         assert_eq!(first.responses[1].issue, None);
         assert_eq!(report.transactions[1].responses[0].body_bytes, 0);
+    }
+
+    #[test]
+    fn reads_selected_chunked_body_beyond_the_preview_limit() {
+        let summary = "正文".repeat(190);
+        let client = stream(&[b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n"]);
+        let mut response = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n".to_vec();
+        for chunk in summary.as_bytes().chunks(127) {
+            response.extend(format!("{:x}\r\n", chunk.len()).bytes());
+            response.extend(chunk);
+            response.extend(b"\r\n");
+        }
+        response.extend(b"0\r\n\r\n");
+        let parts = [&response[..300], &response[300..]];
+        let streams = [client, stream(&parts)];
+        let report = analyze(&flow(), &streams);
+        let message = &report.transactions[0].responses[0];
+        assert_eq!(message.preview.len(), 256);
+        assert_eq!(message.body_bytes, summary.len());
+        assert_eq!(
+            read_body(&flow(), &streams, 1, 0).unwrap(),
+            summary.as_bytes()
+        );
+        assert_eq!(read_body(&flow(), &streams, 1, 1), None);
     }
 
     #[test]

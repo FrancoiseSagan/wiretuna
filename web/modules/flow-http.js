@@ -1,5 +1,6 @@
-import { json, query } from './api.js';
+import { json, query, request } from './api.js';
 import { byId, el } from './dom.js';
+import { bodyPanel } from './http-body.js';
 
 export class HttpView {
   constructor({ onError, onPacket }) {
@@ -81,7 +82,8 @@ export class HttpView {
   async select(id) {
     const serial = ++this.detailSerial;
     try {
-      const message = await json(`${this.path}/http/${id}`);
+      const path = `${this.path}/http/${id}`;
+      const message = await json(path);
       if (serial !== this.detailSerial) return;
       const title = el('strong', caption(message));
       const source = el('button', `来源包 #${message.first_packet}`, 'plain');
@@ -93,12 +95,15 @@ export class HttpView {
         row.append(el('dt', header.name), el('dd', header.value));
         headers.append(row);
       }
-      const summary = el('p', `正文 ${message.body_bytes} B`, 'muted');
+      const summary = el('p', `已捕获正文 ${message.body_bytes} B`, 'muted');
       this.detail.replaceChildren(title, source, headers, summary);
       if (message.issue) this.detail.append(el('p', message.issue, 'sub-note'));
-      if (message.preview.length) {
-        const decoded = new TextDecoder().decode(new Uint8Array(message.preview));
-        this.detail.append(el('pre', decoded));
+      if (message.body_bytes > 0) {
+        const response = await request(`${path}/body`);
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        if (serial !== this.detailSerial) return;
+        summary.textContent = `已捕获正文 ${bytes.length} B`;
+        this.detail.append(bodyPanel(bytes, message.headers));
       }
     } catch (error) {
       if (serial === this.detailSerial) this.onError(error.message);

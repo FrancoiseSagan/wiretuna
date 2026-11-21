@@ -188,3 +188,6 @@ tr.spacer td { padding: 0; border: none; height: 0; }
 .http-transaction button { text-align: left; overflow: hidden; text-overflow: ellipsis; font: .85rem var(--mono); }
 .http-transaction .http-response { color: var(--muted); margin-inline-start: .8rem; }
 @media (max-width: 860px) { .stream-grid { grid-template-columns: minmax(0, 1fr); } }
+.http-body { display: grid; gap: .42rem; margin-top: .55rem; }
+.http-body label { display: flex; align-items: center; gap: .4rem; }
+.http-body select { min-height: 1.9rem; }

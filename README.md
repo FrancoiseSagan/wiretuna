@@ -47,6 +47,9 @@ either direction or open its cleartext HTTP/1.1 transactions. Packet detail
 links to the connection. Stream segments and HTTP messages link back to their
 source packet while it remains in the retention window. Gaps and conflicting
 overlaps are reported in the stream, and incomplete HTTP bodies are labeled.
+The message view loads the retained body on demand, follows the HTTP charset
+when present, and lets you choose another charset. The browser decompresses
+supported content encodings up to 1 MiB of output.
 
 ### Release build with live capture
 
