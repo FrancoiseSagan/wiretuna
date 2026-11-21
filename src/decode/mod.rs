@@ -1,5 +1,6 @@
 //! Bounded, slice-based protocol decoding shared by all capture sources.
 
+mod dns;
 mod ip;
 mod link;
 mod transport;
@@ -22,6 +23,7 @@ pub enum Protocol {
     Udp,
     Icmp,
     Icmpv6,
+    Dns,
 }
 
 impl Protocol {
@@ -38,6 +40,7 @@ impl Protocol {
             Self::Udp => "UDP",
             Self::Icmp => "ICMP",
             Self::Icmpv6 => "ICMPv6",
+            Self::Dns => "DNS",
         }
     }
 }

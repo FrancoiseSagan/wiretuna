@@ -84,6 +84,8 @@ impl Decoder {
             self.issue("invalid UDP length");
         } else if len > bytes.len() && !self.summary.fragmented {
             self.issue("incomplete UDP payload");
+        } else if !self.summary.fragmented && (source == 53 || destination == 53) {
+            self.dns(&bytes[8..len], offset + 8);
         }
     }
 }

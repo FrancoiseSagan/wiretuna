@@ -86,3 +86,47 @@ fn reported_field_ranges_are_valid_for_every_truncated_prefix() {
     }
     assert!(summarize(&packet(65000, bytes.to_vec())).issue.is_some());
 }
+
+#[test]
+fn decodes_dns_names_and_evaluates_typed_filters() {
+    use wiretuna::filter::Filter;
+
+    let dns = [
+        0, 42, 0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0, 1, b'a', 0, 0, 1, 0, 1, 0xc0, 12, 0, 1, 0, 1, 0,
+        0, 0, 30, 0, 4, 192, 0, 2, 1,
+    ];
+    let mut bytes = vec![0; 28];
+    bytes[0] = 0x45;
+    bytes[2..4].copy_from_slice(&(28 + dns.len() as u16).to_be_bytes());
+    bytes[9] = 17;
+    bytes[12..16].copy_from_slice(&[192, 0, 2, 53]);
+    bytes[20..22].copy_from_slice(&53u16.to_be_bytes());
+    bytes[24..26].copy_from_slice(&(8 + dns.len() as u16).to_be_bytes());
+    bytes.extend(dns);
+    let decoded = details(&packet(101, bytes.clone()));
+    assert_eq!(decoded.summary.protocol, Protocol::Dns);
+    assert!(
+        decoded
+            .layers
+            .last()
+            .unwrap()
+            .fields
+            .iter()
+            .any(|field| field.key == "dns.a" && field.value == "192.0.2.1")
+    );
+    assert!(
+        Filter::parse("tcp || (dns && ip.src == 192.0.2.53 && udp.srcport == 53)")
+            .unwrap()
+            .matches(&decoded.summary)
+    );
+    assert!(
+        !Filter::parse("tcp.srcport == 53")
+            .unwrap()
+            .matches(&decoded.summary)
+    );
+    assert!(Filter::parse("udp.srcport == 70000").is_err());
+    assert!(Filter::parse("ip.src == ::1").is_err());
+
+    bytes[48] = 19;
+    assert!(details(&packet(101, bytes)).summary.issue.is_some());
+}
