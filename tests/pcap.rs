@@ -176,3 +176,56 @@ fn accepts_fragmented_io_and_retries_interrupted_reads() {
     assert_eq!(packet.bytes(), &[42]);
     assert_eq!(reader.next_packet().unwrap(), SourceEvent::End);
 }
+
+#[test]
+fn exports_round_trip_bytes_lengths_precision_and_fcs() {
+    use std::sync::Arc;
+    use wiretuna::capture::pcap::PcapExport;
+
+    for resolution in [
+        TimestampResolution::Microseconds,
+        TimestampResolution::Nanoseconds,
+    ] {
+        let mut file = header(false, resolution, 64, 0x2400_0001);
+        record(&mut file, false, 123_456, 3, 9, &[1, 2, 3]);
+        record(&mut file, false, 654_321, 2, 2, &[4, 5]);
+        let mut source = PcapReader::new(file.as_slice()).unwrap();
+        let mut packets = Vec::new();
+        while let SourceEvent::Packet(packet) = source.next_packet().unwrap() {
+            packets.push(Arc::new(packet));
+        }
+        let export = PcapExport::new(packets.clone()).unwrap();
+        let size = export.file_size();
+        let contents = export.flatten().collect::<Vec<_>>();
+        assert_eq!(size, contents.len() as u64);
+        let mut round_trip = PcapReader::new(contents.as_slice()).unwrap();
+        assert_eq!(round_trip.header().timestamp_resolution, resolution);
+        assert_eq!(round_trip.header().fcs_length, Some(4));
+        for packet in packets {
+            let SourceEvent::Packet(decoded) = round_trip.next_packet().unwrap() else {
+                panic!("expected exported packet");
+            };
+            assert_eq!(decoded, *packet);
+        }
+        assert_eq!(round_trip.next_packet().unwrap(), SourceEvent::End);
+    }
+}
+
+#[test]
+fn rejects_packet_metadata_that_classic_pcap_cannot_represent() {
+    use std::sync::Arc;
+    use wiretuna::{
+        capture::pcap::PcapExport,
+        packet::{PacketRecord, Timestamp},
+    };
+
+    let packet = |interface, link, timestamp| {
+        Arc::new(PacketRecord::new(interface, LinkType(link), timestamp, 1, Box::new([0])).unwrap())
+    };
+    let time = |seconds| Timestamp::from_fraction(seconds, 101, TimestampResolution::Microseconds);
+    assert!(PcapExport::new(vec![]).is_err());
+    assert!(PcapExport::new(vec![packet(0, 1, None)]).is_err());
+    assert!(PcapExport::new(vec![packet(0, 1, time(-1))]).is_err());
+    assert!(PcapExport::new(vec![packet(0, 1, time(1)), packet(0, 2, time(2))]).is_err());
+    assert!(PcapExport::new(vec![packet(0, 1, time(1)), packet(1, 1, time(2))]).is_err());
+}

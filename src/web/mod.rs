@@ -2,6 +2,7 @@
 
 mod api;
 mod assets;
+mod export;
 mod flows;
 mod service;
 
@@ -82,6 +83,7 @@ fn router(service: Arc<Service>) -> Router {
         .route("/api/v1/sessions", get(api::sessions).post(api::start))
         .route("/api/v1/sessions/{id}", delete(api::remove))
         .route("/api/v1/sessions/{id}/stop", post(api::stop))
+        .route("/api/v1/sessions/{id}/export.pcap", get(export::pcap))
         .route("/api/v1/sessions/{id}/packets", get(api::packets))
         .route(
             "/api/v1/sessions/{id}/packets/{packet_id}",

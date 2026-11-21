@@ -42,6 +42,10 @@ port. The packet workspace supports display filters such as
 `tcp && ip.src == 192.0.2.1`, field inspection and a paginated hex view.
 The interface is embedded in the binary and does not need a frontend build.
 
+Use the pcap export button to download the displayed retained packet range.
+Packets evicted before the export cannot be recovered by the export. The
+file can be reopened by Wiretuna using `serve --input` or `inspect`.
+
 In the TCP workspace, select a connection to inspect reassembled bytes in
 either direction or open its cleartext HTTP/1.1 transactions. Packet detail
 links to the connection. Stream segments and HTTP messages link back to their

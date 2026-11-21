@@ -56,6 +56,7 @@ pub struct PacketRecord {
     link_type: LinkType,
     timestamp: Option<Timestamp>,
     original_len: u32,
+    fcs_length: Option<u8>,
     bytes: Box<[u8]>,
 }
 
@@ -78,8 +79,18 @@ impl PacketRecord {
             link_type,
             timestamp,
             original_len,
+            fcs_length: None,
             bytes,
         })
+    }
+
+    pub(crate) fn with_fcs_length(mut self, length: Option<u8>) -> Self {
+        self.fcs_length = length;
+        self
+    }
+
+    pub(crate) fn fcs_length(&self) -> Option<u8> {
+        self.fcs_length
     }
 
     pub fn interface_id(&self) -> u32 {

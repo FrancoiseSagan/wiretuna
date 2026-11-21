@@ -35,6 +35,7 @@ pub(super) struct Service {
     registry: Mutex<Registry>,
     pub subscriptions: Arc<Semaphore>,
     pub queries: Arc<Semaphore>,
+    pub exports: Arc<Semaphore>,
     pub closing: AtomicBool,
 }
 
@@ -44,6 +45,7 @@ impl Service {
             registry: Mutex::default(),
             subscriptions: Arc::new(Semaphore::new(8)),
             queries: Arc::new(Semaphore::new(12)),
+            exports: Arc::new(Semaphore::new(1)),
             closing: AtomicBool::new(false),
         }
     }

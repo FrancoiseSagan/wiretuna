@@ -236,6 +236,28 @@ impl Session {
             .collect()
     }
 
+    /// Pins exactly the requested retained range while the live window can advance.
+    pub fn snapshot_packets(&self, first: u64, last: u64) -> Option<Vec<Arc<PacketRecord>>> {
+        let window = self.shared.window.lock().unwrap();
+        if first == 0 || first > last || first < window.first() || last > window.seen {
+            return None;
+        }
+        let start = usize::try_from(first - window.first()).ok()?;
+        let count = usize::try_from(last - first + 1).ok()?;
+        if start.checked_add(count)? > window.entries.len() {
+            return None;
+        }
+        Some(
+            window
+                .entries
+                .iter()
+                .skip(start)
+                .take(count)
+                .map(|entry| Arc::clone(&entry.packet))
+                .collect(),
+        )
+    }
+
     pub fn flow(&self, id: u64) -> Option<Flow> {
         self.shared.window.lock().unwrap().tracker.flow(id)
     }
@@ -394,6 +416,11 @@ mod tests {
         assert!(session.packet(3).is_none());
         assert_eq!(session.packet(5).unwrap().packet.bytes(), &[5]);
         assert_eq!(session.packets(4, 1)[0].id, 5);
+        assert!(session.snapshot_packets(3, 5).is_none());
+        assert!(session.snapshot_packets(4, 6).is_none());
+        let snapshot = session.snapshot_packets(4, 5).unwrap();
+        assert_eq!(snapshot.len(), 2);
+        assert_eq!(snapshot[0].bytes(), &[4]);
     }
 
     #[test]

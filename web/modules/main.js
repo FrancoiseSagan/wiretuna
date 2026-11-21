@@ -1,4 +1,4 @@
-import { json, post, request, sessionPath } from './api.js';
+import { json, post, query, request, sessionPath } from './api.js';
 import { PacketDetails } from './details.js';
 import { byId, el } from './dom.js';
 import { FlowList } from './flows.js';
@@ -13,6 +13,7 @@ const interfaceSelect = byId('interface');
 let status = null;
 let live = false;
 let mutating = false;
+let exporting = null;
 
 function notice(message = '') {
   const element = byId('notice');
@@ -84,6 +85,11 @@ function renderStatus() {
   byId('start').disabled = !live || Boolean(status) || mutating || !interfaceSelect.value;
   byId('stop').disabled = !status || finished || phase === 'stopping' || mutating;
   byId('clear').disabled = !finished || mutating;
+  const range = exporting ?? status;
+  byId('export-pcap').disabled = Boolean(exporting) || !status?.retained;
+  byId('export-range').textContent = range?.retained
+    ? `${range.retained} 包 · #${range.first}–#${range.seen}`
+    : '';
 }
 
 function setStatus(next) {
@@ -130,6 +136,30 @@ byId('clear').addEventListener('click', () => mutate(async () => {
   await request(sessionPath(status.id), { method: 'DELETE' });
   setStatus(null);
 }));
+byId('export-pcap').addEventListener('click', async () => {
+  if (exporting || !status?.retained) return;
+  const { id, first, seen: last } = status;
+  const parameters = query({ first, last });
+  exporting = status;
+  notice();
+  renderStatus();
+  try {
+    const download = await request(sessionPath(id, `/export.pcap?${parameters}`));
+    const url = URL.createObjectURL(await download.blob());
+    const link = el('a');
+    link.href = url;
+    link.download = `wiretuna-session-${id}-${first}-${last}.pcap`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    notice(error.message);
+  } finally {
+    exporting = null;
+    renderStatus();
+  }
+});
 byId('display-form').addEventListener('submit', event => {
   event.preventDefault();
   notice();

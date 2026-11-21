@@ -70,6 +70,11 @@ def check(binary, file):
         assert packet["layers"][-1]["name"] == "UDP", packet
         assert request(base + "/packets/1/bytes?offset=42&limit=4") == b"test"
         request(base + "/packets?filter=unknown", expected=400)
+        export = request(base + "/export.pcap?first=1&last=1")
+        assert len(export) == file.stat().st_size
+        assert export[:16] == file.read_bytes()[:16]
+        assert export[20:] == file.read_bytes()[20:]
+        request(base + "/export.pcap?first=1&last=2", expected=409)
         request(base, method="DELETE", expected=403)
 
         events = http.client.HTTPConnection("127.0.0.1", port, timeout=5)

@@ -1,4 +1,7 @@
-//! Streaming reader for classic pcap 2.4 files.
+//! Streaming reader and exporter for classic pcap 2.4 files.
+
+mod export;
+pub use export::PcapExport;
 
 use std::{
     error::Error,
@@ -155,7 +158,7 @@ impl<R: Read> PcapReader<R> {
             false,
         )?;
         PacketRecord::new(0, self.header.link_type, Some(timestamp), original, payload)
-            .map(SourceEvent::Packet)
+            .map(|packet| SourceEvent::Packet(packet.with_fcs_length(self.header.fcs_length)))
             .map_err(|error| PcapError::invalid(start + 8, error.to_string()))
     }
 }
