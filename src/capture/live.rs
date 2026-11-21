@@ -97,11 +97,14 @@ impl LiveCapture {
         let capture = capture
             .setnonblock()
             .map_err(|error| backend_error("enabling nonblocking capture", error))?;
-        let link_type = u16::try_from(capture.get_datalink().0)
-            .map(LinkType)
-            .map_err(|_| {
-                io::Error::other("capture returned a link type outside the supported range")
-            })?;
+        let link_type = match capture.get_datalink().0 {
+            // Linux's DLT_RAW is 12 while the capture file LINKTYPE_RAW is 101.
+            12 => ::pcap::Linktype::RAW.0,
+            value => value,
+        };
+        let link_type = u16::try_from(link_type).map(LinkType).map_err(|_| {
+            io::Error::other("capture returned a link type outside the supported range")
+        })?;
 
         Ok(Self {
             capture,

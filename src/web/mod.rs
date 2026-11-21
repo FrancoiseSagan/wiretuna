@@ -52,13 +52,26 @@ async fn serve(config: Config) -> io::Result<()> {
     let shutdown = Arc::clone(&service);
     axum::serve(listener, router(service))
         .with_graceful_shutdown(async move {
-            let _ = tokio::signal::ctrl_c().await;
+            shutdown_signal().await;
             shutdown.closing.store(true, Ordering::Relaxed);
             if let Some(active) = shutdown.current() {
                 active.session.stop();
             }
         })
         .await
+}
+
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    if let Ok(mut terminate) =
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+    {
+        let interrupt = std::pin::pin!(tokio::signal::ctrl_c());
+        let terminate = std::pin::pin!(terminate.recv());
+        futures_util::future::select(interrupt, terminate).await;
+        return;
+    }
+    let _ = tokio::signal::ctrl_c().await;
 }
 
 fn router(service: Arc<Service>) -> Router {

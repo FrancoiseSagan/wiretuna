@@ -74,6 +74,12 @@ impl Service {
             .into_owned();
         self.start(label, || {
             Session::start(Mode::Offline, Limits::default(), move || {
+                if !path.metadata()?.is_file() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "offline input must be a regular file",
+                    ));
+                }
                 let file = File::open(&path)?;
                 PcapReader::new(BufReader::new(file)).map_err(io::Error::other)
             })

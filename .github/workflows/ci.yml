@@ -16,6 +16,8 @@ jobs:
       - run: cargo test --locked
       - run: cargo clippy --locked --features web --all-targets -- -D warnings
       - run: cargo test --locked --features web
+      - run: cargo build --locked --features web
+      - run: python3 tests/web_smoke.py target/debug/wiretuna
 
   live-capture:
     runs-on: ubuntu-latest
