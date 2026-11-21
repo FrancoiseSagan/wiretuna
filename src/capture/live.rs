@@ -8,7 +8,7 @@ use std::{
 use ::pcap::{Active, Capture, Device};
 use nix::net::if_::if_nametoindex;
 
-use super::{PacketSource, SourceEvent};
+use super::{BackendStats, PacketSource, SourceEvent};
 use crate::packet::{LinkType, PacketRecord, Timestamp, TimestampResolution};
 
 #[derive(Debug)]
@@ -116,12 +116,12 @@ impl LiveCapture {
         self.link_type
     }
 
-    pub fn stats(&mut self) -> io::Result<Stats> {
+    pub fn stats(&mut self) -> io::Result<BackendStats> {
         let stats = self
             .capture
             .stats()
             .map_err(|error| backend_error("reading capture statistics", error))?;
-        Ok(Stats {
+        Ok(BackendStats {
             received: stats.received,
             dropped: stats.dropped,
             interface_dropped: stats.if_dropped,
@@ -172,13 +172,10 @@ impl PacketSource for LiveCapture {
         .map(SourceEvent::Packet)
         .map_err(io::Error::other)
     }
-}
 
-#[derive(Debug)]
-pub struct Stats {
-    pub received: u32,
-    pub dropped: u32,
-    pub interface_dropped: u32,
+    fn backend_stats(&mut self) -> Option<BackendStats> {
+        self.stats().ok()
+    }
 }
 
 fn invalid_input(message: impl Into<String>) -> io::Error {

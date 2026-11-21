@@ -13,10 +13,21 @@ pub enum SourceEvent {
     End,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BackendStats {
+    pub received: u32,
+    pub dropped: u32,
+    pub interface_dropped: u32,
+}
+
 pub trait PacketSource {
     type Error: std::error::Error;
 
     fn next_packet(&mut self) -> Result<SourceEvent, Self::Error>;
+
+    fn backend_stats(&mut self) -> Option<BackendStats> {
+        None
+    }
 }
 
 #[cfg(test)]
