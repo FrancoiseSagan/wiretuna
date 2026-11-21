@@ -1,4 +1,6 @@
 mod inspect;
+#[cfg(all(target_os = "linux", feature = "live-capture"))]
+mod live_cli;
 
 use std::{env, ffi::OsString, io, path::Path, process::ExitCode};
 
@@ -17,18 +19,45 @@ Options:
 fn main() -> ExitCode {
     let args: Vec<OsString> = env::args_os().skip(1).collect();
     match args.as_slice() {
-        [] => println!("{HELP}"),
-        [arg] if arg == "-h" || arg == "--help" => println!("{HELP}"),
+        [] => print_help(),
+        [arg] if arg == "-h" || arg == "--help" => print_help(),
         [arg] if arg == "-V" || arg == "--version" => {
             println!("wiretuna {}", env!("CARGO_PKG_VERSION"));
         }
         [command, flag] if command == "inspect" && (flag == "-h" || flag == "--help") => {
-            println!("{HELP}");
+            print_help();
         }
         [command, rest @ ..] if command == "inspect" => return run_inspect(rest),
+        #[cfg(all(target_os = "linux", feature = "live-capture"))]
+        [command] if command == "interfaces" => return live_result(live_cli::list()),
+        #[cfg(all(target_os = "linux", feature = "live-capture"))]
+        [command, flag] if command == "capture" && (flag == "-h" || flag == "--help") => {
+            println!("{}", live_cli::HELP);
+        }
+        #[cfg(all(target_os = "linux", feature = "live-capture"))]
+        [command, rest @ ..] if command == "capture" => {
+            return live_result(live_cli::capture(rest));
+        }
         _ => return usage_error(),
     }
     ExitCode::SUCCESS
+}
+
+fn print_help() {
+    println!("{HELP}");
+    #[cfg(all(target_os = "linux", feature = "live-capture"))]
+    println!("\n{}", live_cli::HELP);
+}
+
+#[cfg(all(target_os = "linux", feature = "live-capture"))]
+fn live_result(result: io::Result<()>) -> ExitCode {
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("wiretuna: {error}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn run_inspect(args: &[OsString]) -> ExitCode {

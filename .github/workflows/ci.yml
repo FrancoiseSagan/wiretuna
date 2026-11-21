@@ -14,3 +14,12 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked
+
+  live-capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: sudo apt-get update && sudo apt-get install -y libpcap-dev
+      - run: rustup show
+      - run: cargo clippy --locked --features live-capture --all-targets -- -D warnings
+      - run: cargo test --locked --features live-capture

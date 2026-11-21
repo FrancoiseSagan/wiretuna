@@ -1,3 +1,5 @@
+#[cfg(all(target_os = "linux", feature = "live-capture"))]
+pub mod live;
 pub mod pcap;
 
 use crate::packet::PacketRecord;
