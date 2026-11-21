@@ -6,6 +6,8 @@ use super::Session;
 pub struct PacketSummary {
     pub id: u64,
     pub timestamp: Option<Timestamp>,
+    pub interface_id: u32,
+    pub link_type: u16,
     pub captured_len: u32,
     pub original_len: u32,
     pub summary: Summary,
@@ -56,6 +58,8 @@ impl Session {
                 page.packets.push(PacketSummary {
                     id: entry.id,
                     timestamp: entry.packet.timestamp(),
+                    interface_id: entry.packet.interface_id(),
+                    link_type: entry.packet.link_type().0,
                     captured_len: entry.packet.captured_len(),
                     original_len: entry.packet.original_len(),
                     summary: entry.summary,

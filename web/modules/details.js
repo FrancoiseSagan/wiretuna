@@ -57,6 +57,10 @@ export class PacketDetails {
     byId('byte-count').textContent = `${packet.captured_len} B`;
     this.body.classList.remove('empty');
     const fragment = document.createDocumentFragment();
+    fragment.append(el('p', `接口 #${packet.interface_id} · 链路类型 ${packet.link_type}`, 'packet-meta'));
+    if (packet.timestamp && !packet.timestamp.exact_nanoseconds) {
+      fragment.append(el('p', `源时间分辨率 ${packet.timestamp.precision}，时间已截到纳秒。`, 'packet-meta'));
+    }
     if (packet.issue) fragment.append(el('p', packet.issue, 'detail-issue'));
     for (const layer of packet.layers) {
       const group = el('details', '', 'layer');

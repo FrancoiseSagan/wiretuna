@@ -1,8 +1,12 @@
+mod file;
+pub use file::CaptureFileError;
 #[cfg(all(target_os = "linux", feature = "live-capture"))]
 pub mod helper;
 #[cfg(all(target_os = "linux", feature = "live-capture"))]
 pub mod live;
+pub mod offline;
 pub mod pcap;
+pub mod pcapng;
 
 use crate::packet::PacketRecord;
 

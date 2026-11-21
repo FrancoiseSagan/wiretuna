@@ -109,7 +109,7 @@ tr[aria-selected="true"] { background: var(--selected); }
 tr[aria-selected="true"] td:first-child { box-shadow: inset 2px 0 var(--accent); color: var(--accent); }
 tr.spacer td { padding: 0; border: none; height: 0; }
 .c-id { width: 5.5rem; }
-.c-time { width: 10rem; }
+.c-time { width: 10.5rem; }
 .c-end { width: 16%; }
 .c-proto { width: 7rem; }
 .c-len { width: 5rem; }
@@ -196,3 +196,4 @@ tr.spacer td { padding: 0; border: none; height: 0; }
 .session-export { display: grid; gap: .35rem; margin-top: .6rem; font-size: .875rem; }
 .session-export p { font: .8rem var(--mono); overflow-wrap: anywhere; }
 .session-export p:empty { display: none; }
+.packet-meta { padding: .4rem .8rem; font-size: .8rem; color: var(--muted); }

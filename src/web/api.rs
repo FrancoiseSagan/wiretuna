@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use crate::{
     decode::{self, Summary},
     filter::Filter,
-    packet::Timestamp,
+    packet::{Timestamp, TimestampResolution},
     session::{PacketSummary, Phase, Status},
 };
 
@@ -178,6 +178,7 @@ pub(super) async fn packet(
         .collect();
     Ok(Json(json!({
         "id": entry.id.to_string(), "link_type": entry.packet.link_type().0,
+        "interface_id": entry.packet.interface_id(),
         "captured_len": entry.packet.captured_len(), "original_len": entry.packet.original_len(),
         "timestamp": timestamp_json(entry.packet.timestamp()), "issue": details.summary.issue,
         "flow_id": entry.flow_id.map(|id| id.to_string()), "layers": layers,
@@ -291,10 +292,16 @@ async fn subscribe(
 }
 
 pub(super) fn timestamp_json(timestamp: Option<Timestamp>) -> Value {
-    timestamp.map_or(
-        Value::Null,
-        |time| json!({"seconds": time.seconds(), "nanoseconds": time.nanoseconds()}),
-    )
+    timestamp.map_or(Value::Null, |time| {
+        let precision = match time.resolution() {
+            TimestampResolution::Microseconds => "microseconds".to_owned(),
+            TimestampResolution::Nanoseconds => "nanoseconds".to_owned(),
+            TimestampResolution::Decimal(value) => format!("10^-{value} s"),
+            TimestampResolution::Binary(value) => format!("2^-{value} s"),
+        };
+        json!({"seconds": time.seconds(), "nanoseconds": time.nanoseconds(),
+               "precision": precision, "exact_nanoseconds": time.exact_nanoseconds()})
+    })
 }
 
 fn packet_json(packet: PacketSummary) -> Value {
@@ -310,6 +317,7 @@ fn packet_json(packet: PacketSummary) -> Value {
     } = packet.summary;
     json!({
         "id": packet.id.to_string(), "timestamp": timestamp_json(packet.timestamp),
+        "interface_id": packet.interface_id, "link_type": packet.link_type,
         "source": source.map(|ip| ip.to_string()), "destination": destination.map(|ip| ip.to_string()),
         "source_port": source_port, "destination_port": destination_port,
         "protocol": protocol.name(), "captured_len": packet.captured_len, "original_len": packet.original_len,

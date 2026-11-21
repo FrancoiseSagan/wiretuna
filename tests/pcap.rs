@@ -9,6 +9,7 @@ fn header(little: bool, resolution: TimestampResolution, snaplen: u32, link_info
     let magic: u32 = match resolution {
         TimestampResolution::Microseconds => 0xa1b2_c3d4,
         TimestampResolution::Nanoseconds => 0xa1b2_3c4d,
+        _ => panic!("expected classic pcap timestamp precision"),
     };
     let mut result = Vec::new();
     for word in [

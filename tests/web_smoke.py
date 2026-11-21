@@ -24,7 +24,22 @@ def capture_file(path):
     path.write_bytes(header + packet + frame)
 
 
-def check(binary, file):
+def pcapng_file(path, classic):
+    def block(kind, body):
+        size = len(body) + 12
+        return struct.pack("<II", kind, size) + body + struct.pack("<I", size)
+
+    seconds, micros, captured, original = struct.unpack_from("<IIII", classic, 24)
+    timestamp = seconds * 1_000_000 + micros
+    packet = classic[40:]
+    assert len(packet) == captured
+    section = block(0x0A0D0D0A, struct.pack("<IHHq", 0x1A2B3C4D, 1, 0, -1))
+    interface = block(1, struct.pack("<HHI", 1, 0, 65535))
+    record = struct.pack("<IIIII", 0, timestamp >> 32, timestamp & 0xFFFFFFFF, captured, original)
+    path.write_bytes(section + interface + block(6, record + packet + bytes(-len(packet) % 4)))
+
+
+def check(binary, file, classic):
     child = subprocess.Popen(
         [binary, "serve", "--port", "0", "--input", str(file)],
         stdout=subprocess.PIPE,
@@ -71,9 +86,9 @@ def check(binary, file):
         assert request(base + "/packets/1/bytes?offset=42&limit=4") == b"test"
         request(base + "/packets?filter=unknown", expected=400)
         export = request(base + "/export.pcap?first=1&last=1")
-        assert len(export) == file.stat().st_size
-        assert export[:16] == file.read_bytes()[:16]
-        assert export[20:] == file.read_bytes()[20:]
+        assert len(export) == len(classic)
+        assert export[:16] == classic[:16]
+        assert export[20:] == classic[20:]
         request(base + "/export.pcap?first=1&last=2", expected=409)
         request(base, method="DELETE", expected=403)
 
@@ -104,5 +119,10 @@ if __name__ == "__main__":
     with tempfile.TemporaryDirectory() as directory:
         fixture = pathlib.Path(directory) / "sample.pcap"
         capture_file(fixture)
-        check(str(pathlib.Path(sys.argv[1]).resolve()), fixture)
+        binary = str(pathlib.Path(sys.argv[1]).resolve())
+        classic = fixture.read_bytes()
+        check(binary, fixture, classic)
+        next_fixture = pathlib.Path(directory) / "pcapng-without-extension"
+        pcapng_file(next_fixture, classic)
+        check(binary, next_fixture, classic)
     print("Embedded assets, pcap playback, filtering, packet bytes, SSE and shutdown passed.")

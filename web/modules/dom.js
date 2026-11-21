@@ -17,5 +17,5 @@ export function utc(time) {
   if (!time) return '—';
   const date = new Date(time.seconds * 1000);
   if (!Number.isFinite(date.getTime())) return '—';
-  return `${date.toISOString().slice(11, 19)}.${String(time.nanoseconds).padStart(9, '0').slice(0, 6)}`;
+  return `${date.toISOString().slice(11, 19)}.${String(time.nanoseconds).padStart(9, '0').slice(0, time.precision === 'microseconds' ? 6 : 9)}`;
 }

@@ -7,6 +7,8 @@ pub struct LinkType(pub u16);
 pub enum TimestampResolution {
     Microseconds,
     Nanoseconds,
+    Decimal(u8),
+    Binary(u8),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,6 +16,7 @@ pub struct Timestamp {
     seconds: i64,
     nanoseconds: u32,
     resolution: TimestampResolution,
+    exact_nanoseconds: bool,
 }
 
 impl Timestamp {
@@ -26,6 +29,7 @@ impl Timestamp {
         let units_per_second = match resolution {
             TimestampResolution::Microseconds => 1_000_000,
             TimestampResolution::Nanoseconds => 1_000_000_000,
+            TimestampResolution::Decimal(_) | TimestampResolution::Binary(_) => return None,
         };
         if fraction >= units_per_second {
             return None;
@@ -34,7 +38,42 @@ impl Timestamp {
             seconds,
             nanoseconds: fraction * (1_000_000_000 / units_per_second),
             resolution,
+            exact_nanoseconds: true,
         })
+    }
+
+    pub(crate) fn from_ticks(
+        ticks: u64,
+        offset: i64,
+        resolution: TimestampResolution,
+    ) -> Option<Self> {
+        let denominator = match resolution {
+            TimestampResolution::Microseconds => Some(1_000_000),
+            TimestampResolution::Nanoseconds => Some(1_000_000_000),
+            TimestampResolution::Decimal(exponent) => 10u128.checked_pow(exponent.into()),
+            TimestampResolution::Binary(exponent) => 1u128.checked_shl(exponent.into()),
+        };
+        let ticks = u128::from(ticks);
+        let (seconds, nanoseconds, exact_nanoseconds) = if let Some(units) = denominator {
+            let fraction = (ticks % units) * 1_000_000_000;
+            (
+                (ticks / units) as i128,
+                (fraction / units) as u32,
+                fraction % units == 0,
+            )
+        } else {
+            (0, 0, ticks == 0)
+        };
+        Some(Self {
+            seconds: i64::try_from(seconds + i128::from(offset)).ok()?,
+            nanoseconds,
+            resolution,
+            exact_nanoseconds,
+        })
+    }
+
+    pub(crate) fn exact_nanoseconds(self) -> bool {
+        self.exact_nanoseconds
     }
 
     pub fn seconds(self) -> i64 {

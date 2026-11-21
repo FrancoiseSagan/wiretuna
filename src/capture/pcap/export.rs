@@ -41,7 +41,12 @@ impl PcapExport {
                     "A packet timestamp is outside the classic pcap range.",
                 ));
             }
-            if timestamp.resolution() == TimestampResolution::Nanoseconds {
+            if !timestamp.exact_nanoseconds() {
+                return Err(invalid(
+                    "A packet timestamp cannot be represented exactly in classic pcap.",
+                ));
+            }
+            if timestamp.resolution() != TimestampResolution::Microseconds {
                 timestamps = TimestampResolution::Nanoseconds;
             }
             snaplen = snaplen.max(packet.captured_len());
@@ -55,11 +60,18 @@ impl PcapExport {
 
         let mut link = u32::from(first.link_type().0);
         if let Some(length) = first.fcs_length() {
+            if length > 30 || length % 2 != 0 {
+                return Err(invalid(
+                    "The frame check sequence length cannot be represented in classic pcap.",
+                ));
+            }
             link |= (1 << 26) | (u32::from(length / 2) << 28);
         }
         let magic: u32 = match timestamps {
             TimestampResolution::Microseconds => 0xa1b2_c3d4,
-            TimestampResolution::Nanoseconds => 0xa1b2_3c4d,
+            TimestampResolution::Nanoseconds
+            | TimestampResolution::Decimal(_)
+            | TimestampResolution::Binary(_) => 0xa1b2_3c4d,
         };
         let mut header = [0; 24];
         header[..4].copy_from_slice(&magic.to_le_bytes());
@@ -92,7 +104,9 @@ impl Iterator for PcapExport {
         let timestamp = packet.timestamp().unwrap();
         let fraction = match self.timestamps {
             TimestampResolution::Microseconds => timestamp.nanoseconds() / 1000,
-            TimestampResolution::Nanoseconds => timestamp.nanoseconds(),
+            TimestampResolution::Nanoseconds
+            | TimestampResolution::Decimal(_)
+            | TimestampResolution::Binary(_) => timestamp.nanoseconds(),
         };
         let mut record = Vec::with_capacity(16 + packet.bytes().len());
         record.extend_from_slice(&(timestamp.seconds() as u32).to_le_bytes());

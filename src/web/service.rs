@@ -12,7 +12,7 @@ use axum::http::StatusCode;
 use tokio::sync::Semaphore;
 
 use crate::{
-    capture::pcap::PcapReader,
+    capture::offline::OfflineReader,
     session::{Limits, Mode, Session},
 };
 
@@ -81,7 +81,7 @@ impl Service {
                     ));
                 }
                 let file = File::open(&path)?;
-                PcapReader::new(BufReader::new(file)).map_err(io::Error::other)
+                OfflineReader::new(BufReader::new(file)).map_err(io::Error::other)
             })
         })
     }

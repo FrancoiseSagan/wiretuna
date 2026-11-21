@@ -1,7 +1,8 @@
 # Wiretuna
 
 Wiretuna is a lightweight network packet analyzer written in Rust. The CLI inspects
-classic pcap 2.4 files and can capture packets on a single Linux interface.
+classic pcap 2.4 and pcapng 1.0 files (including the legacy 1.2 version).
+Live capture supports a single Linux interface.
 The offline build runs without libpcap.
 
 ```sh
@@ -9,7 +10,12 @@ cargo run --locked -- inspect capture.pcap
 cargo run --locked -- inspect --packets capture.pcap
 ```
 
-The reader handles both byte orders and microsecond or nanosecond timestamps.
+The reader detects the format from the file header. It supports both byte
+orders, multiple pcapng sections and interfaces, and Enhanced and Simple
+Packet Blocks. A Simple Packet Block is displayed without a timestamp.
+The pcapng reader applies each interface's timestamp resolution and offset.
+Values requiring subnanosecond precision are truncated for display and
+rejected when exporting to classic pcap.
 Per-packet output shows UTC Unix timestamps in seconds with nine fractional
 digits. The file is processed as a stream with a 1 MiB limit per stored packet.
 

@@ -3,38 +3,14 @@
 mod export;
 pub use export::PcapExport;
 
-use std::{
-    error::Error,
-    fmt,
-    io::{self, Read},
+use std::io::Read;
+
+pub use super::file::CaptureFileError as PcapError;
+use super::{
+    PacketSource, SourceEvent,
+    file::{ByteOrder, MAX_PACKET_BYTES, read_field},
 };
-
-use super::{PacketSource, SourceEvent};
 use crate::packet::{LinkType, PacketRecord, Timestamp, TimestampResolution};
-
-const MAX_PACKET_BYTES: u32 = 1024 * 1024;
-
-#[derive(Clone, Copy)]
-enum ByteOrder {
-    Big,
-    Little,
-}
-
-impl ByteOrder {
-    fn u16(self, bytes: [u8; 2]) -> u16 {
-        match self {
-            Self::Big => u16::from_be_bytes(bytes),
-            Self::Little => u16::from_le_bytes(bytes),
-        }
-    }
-
-    fn u32(self, bytes: [u8; 4]) -> u32 {
-        match self {
-            Self::Big => u32::from_be_bytes(bytes),
-            Self::Little => u32::from_le_bytes(bytes),
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PcapHeader {
@@ -68,7 +44,10 @@ impl<R: Read> PcapReader<R> {
             [0xa1, 0xb2, 0x3c, 0x4d] => (Big, Nanoseconds),
             [0x4d, 0x3c, 0xb2, 0xa1] => (Little, Nanoseconds),
             [0x0a, 0x0d, 0x0d, 0x0a] => {
-                return Err(PcapError::invalid(0, "pcapng is not supported"));
+                return Err(PcapError::invalid(
+                    0,
+                    "use the pcapng or offline reader for this file",
+                ));
             }
             _ => return Err(PcapError::invalid(0, "unrecognized pcap magic")),
         };
@@ -174,76 +153,5 @@ impl<R: Read> PacketSource for PcapReader<R> {
         let result = self.read_record();
         self.finished = !matches!(&result, Ok(SourceEvent::Packet(_)));
         result
-    }
-}
-
-fn read_field(
-    input: &mut impl Read,
-    offset: &mut u64,
-    mut bytes: &mut [u8],
-    description: &str,
-    clean_end_allowed: bool,
-) -> Result<bool, PcapError> {
-    let start = *offset;
-    while !bytes.is_empty() {
-        match input.read(bytes) {
-            Ok(0) if clean_end_allowed && *offset == start => return Ok(false),
-            Ok(0) => {
-                return Err(PcapError::invalid(
-                    *offset,
-                    format!("incomplete {description}"),
-                ));
-            }
-            Ok(n) => {
-                *offset += n as u64;
-                bytes = &mut bytes[n..];
-            }
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-            Err(error) => {
-                return Err(PcapError {
-                    offset: *offset,
-                    message: format!("reading {description}"),
-                    cause: Some(error),
-                });
-            }
-        }
-    }
-    Ok(true)
-}
-
-#[derive(Debug)]
-pub struct PcapError {
-    offset: u64,
-    message: String,
-    cause: Option<io::Error>,
-}
-
-impl PcapError {
-    fn invalid(offset: u64, message: impl Into<String>) -> Self {
-        Self {
-            offset,
-            message: message.into(),
-            cause: None,
-        }
-    }
-
-    pub fn offset(&self) -> u64 {
-        self.offset
-    }
-}
-
-impl fmt::Display for PcapError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "pcap at byte {}: {}", self.offset, self.message)?;
-        if let Some(cause) = &self.cause {
-            write!(formatter, ": {cause}")?;
-        }
-        Ok(())
-    }
-}
-
-impl Error for PcapError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        self.cause.as_ref().map(|cause| cause as &dyn Error)
     }
 }
