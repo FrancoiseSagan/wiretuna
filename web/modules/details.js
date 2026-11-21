@@ -9,6 +9,9 @@ export class PacketDetails {
     this.serial = 0;
     this.byteSerial = 0;
     this.body = byId('protocol-detail');
+    byId('packet-flow').addEventListener('click', () => {
+      if (this.packet?.flow_id) this.onFlow?.(this.packet.flow_id);
+    });
     this.hex = byId('hex');
     this.offset = 0;
     byId('hex-prev').addEventListener('click', () => this.loadBytes(this.offset - BYTE_PAGE));
@@ -24,6 +27,7 @@ export class PacketDetails {
     this.body.classList.add('empty');
     this.hex.replaceChildren(el('span', '选择数据包后显示。', 'muted'));
     byId('selected-id').textContent = '';
+    byId('packet-flow').hidden = true;
     byId('byte-count').textContent = '';
     byId('hex-range').textContent = '';
     byId('hex-prev').disabled = true;
@@ -48,6 +52,8 @@ export class PacketDetails {
   renderFields() {
     const packet = this.packet;
     byId('selected-id').textContent = `#${packet.id}`;
+    byId('packet-flow').hidden = packet.flow_id == null;
+    byId('packet-flow').textContent = `查看连接 #${packet.flow_id ?? ''}`;
     byId('byte-count').textContent = `${packet.captured_len} B`;
     this.body.classList.remove('empty');
     const fragment = document.createDocumentFragment();

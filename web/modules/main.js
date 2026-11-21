@@ -1,6 +1,7 @@
 import { json, post, request, sessionPath } from './api.js';
 import { PacketDetails } from './details.js';
 import { byId, el } from './dom.js';
+import { FlowList } from './flows.js';
 import { PacketList } from './packets.js';
 
 const phaseNames = {
@@ -25,6 +26,47 @@ const packets = new PacketList({
   onError: notice,
 });
 
+const flows = new FlowList({
+  onError: notice,
+  onPacket: id => {
+    showWorkspace('packets');
+    flowFilter(null);
+    packets.jump(id);
+  },
+  onPacketFilter: id => {
+    showWorkspace('packets');
+    flowFilter(id);
+    packets.selectFlow(id);
+  },
+});
+details.onFlow = id => {
+  showWorkspace('flows');
+  flows.select(id);
+};
+
+function flowFilter(id) {
+  byId('flow-filter-bar').hidden = id == null;
+  byId('flow-filter-label').textContent = id == null ? '' : `连接 #${id}`;
+}
+
+function showWorkspace(view) {
+  const packetView = view === 'packets';
+  byId('nav-packets').setAttribute('aria-pressed', String(packetView));
+  byId('nav-flows').setAttribute('aria-pressed', String(!packetView));
+  byId('packet-workspace').hidden = !packetView;
+  byId('flow-workspace').hidden = packetView;
+  byId('workspace-title').textContent = packetView ? '数据包' : 'TCP 连接';
+  flows.activate(!packetView);
+  if (packetView) packets.render();
+}
+
+byId('nav-packets').addEventListener('click', () => showWorkspace('packets'));
+byId('nav-flows').addEventListener('click', () => showWorkspace('flows'));
+byId('clear-flow-filter').addEventListener('click', () => {
+  flowFilter(null);
+  packets.selectFlow(null);
+});
+
 function renderStatus() {
   const phase = status?.phase ?? 'idle';
   const finished = ['finished', 'failed'].includes(phase);
@@ -45,10 +87,14 @@ function renderStatus() {
 }
 
 function setStatus(next) {
-  if (status?.id !== next?.id) details.clear();
+  if (status?.id !== next?.id) {
+    details.clear();
+    flowFilter(null);
+  }
   if (next?.error && next.error !== status?.error) notice(next.error);
   status = next;
   packets.setStatus(next);
+  flows.setStatus(next);
   renderStatus();
 }
 

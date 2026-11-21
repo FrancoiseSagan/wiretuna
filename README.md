@@ -41,3 +41,9 @@ Open `http://127.0.0.1:8765` in a browser. Use `--port` to change the loopback
 port. The packet workspace supports display filters such as
 `tcp && ip.src == 192.0.2.1`, field inspection and a paginated hex view.
 The interface is embedded in the binary and does not need a frontend build.
+
+In the TCP workspace, select a connection to inspect reassembled bytes in
+either direction or open its cleartext HTTP/1.1 transactions. Packet detail
+links to the connection. Stream segments and HTTP messages link back to their
+source packet while it remains in the retention window. Gaps and conflicting
+overlaps are reported in the stream, and incomplete HTTP bodies are labeled.

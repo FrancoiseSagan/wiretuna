@@ -56,6 +56,7 @@ export class PacketList {
       this.loading = false;
       this.history = [];
       this.items = [];
+      this.flow = null;
       this.selected = null;
       this.start = 0n;
       this.cursor = 0n;

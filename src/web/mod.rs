@@ -2,6 +2,7 @@
 
 mod api;
 mod assets;
+mod flows;
 mod service;
 
 use std::{
@@ -79,6 +80,24 @@ fn router(service: Arc<Service>) -> Router {
         )
         .route("/api/v1/sessions/{id}/events", get(api::session_events))
         .route("/api/v1/events", get(api::events))
+        .route("/api/v1/sessions/{id}/flows", get(flows::list))
+        .route("/api/v1/sessions/{id}/flows/{flow_id}", get(flows::get))
+        .route(
+            "/api/v1/sessions/{id}/flows/{flow_id}/segments",
+            get(flows::segments),
+        )
+        .route(
+            "/api/v1/sessions/{id}/flows/{flow_id}/bytes",
+            get(flows::bytes),
+        )
+        .route(
+            "/api/v1/sessions/{id}/flows/{flow_id}/http",
+            get(flows::http),
+        )
+        .route(
+            "/api/v1/sessions/{id}/flows/{flow_id}/http/{message_id}",
+            get(flows::message),
+        )
         .layer(DefaultBodyLimit::max(8192))
         .layer(middleware::from_fn_with_state(Arc::clone(&service), access))
         .with_state(service)

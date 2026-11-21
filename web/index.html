@@ -55,6 +55,10 @@
         </div>
         <span class="state" id="phase" data-phase="idle">空闲</span>
       </header>
+      <nav class="view-nav" aria-label="分析视图">
+        <button id="nav-packets" type="button" aria-pressed="true">数据包</button>
+        <button id="nav-flows" type="button" aria-pressed="false">TCP 连接</button>
+      </nav>
       <div class="notice" id="notice" role="alert" hidden></div>
       <div id="packet-workspace" class="packet-workspace">
         <section class="panel packet-panel" aria-label="数据包列表">
@@ -66,6 +70,9 @@
               <button type="button" id="reset-filter" class="plain">重置</button>
             </form>
             <label class="toggle"><input id="follow" type="checkbox" checked> 跟随最新</label>
+          </div>
+          <div id="flow-filter-bar" class="filter-bar" hidden>
+            <span id="flow-filter-label"></span><button id="clear-flow-filter" type="button">清除连接筛选</button>
           </div>
           <div id="packet-scroll" class="packet-scroll" tabindex="0">
             <table>
@@ -82,7 +89,7 @@
         </section>
         <div class="inspection">
           <section class="panel detail-panel" aria-labelledby="detail-title">
-            <div class="panel-heading"><h2 id="detail-title">协议详情</h2><span id="selected-id" class="muted mono"></span></div>
+            <div class="panel-heading"><h2 id="detail-title">协议详情</h2><div class="button-group"><button type="button" id="packet-flow" hidden></button><span id="selected-id" class="muted mono"></span></div></div>
             <div id="protocol-detail" class="detail-body empty">选择一个数据包以查看字段。</div>
           </section>
           <section class="panel detail-panel" aria-labelledby="hex-title">
@@ -91,6 +98,62 @@
             <div class="panel-footer"><span id="hex-range"></span><div class="button-group"><button id="hex-prev" disabled>上一段</button><button id="hex-next" disabled>下一段</button></div></div>
           </section>
         </div>
+      </div>
+      <div id="flow-workspace" class="flow-workspace" hidden>
+        <section class="panel flow-list-panel" aria-labelledby="flow-list-title">
+          <header class="panel-heading"><h2 id="flow-list-title">TCP 连接列表</h2><button id="flow-refresh" type="button">刷新</button></header>
+          <div class="flow-scroll">
+            <table class="flow-list">
+              <colgroup><col class="c-id"><col><col><col class="flow-stat"><col class="flow-stat"><col class="flow-state"></colgroup>
+              <thead><tr><th scope="col">连接</th><th scope="col">端点 A</th><th scope="col">端点 B</th><th scope="col">包数</th><th scope="col">捕获字节</th><th scope="col">状态</th></tr></thead>
+              <tbody id="flow-list"></tbody>
+            </table>
+            <p id="flow-empty" class="empty">当前会话没有可显示的 TCP 连接。</p>
+          </div>
+          <footer class="panel-footer"><span id="flow-count"></span><div class="button-group"><button id="flow-prev" type="button" disabled>上一页</button><button id="flow-next" type="button" disabled>下一页</button></div></footer>
+        </section>
+        <section class="panel flow-panel" aria-labelledby="flow-detail-title">
+          <header class="panel-heading"><div><h2 id="flow-detail-title">连接详情</h2><p id="flow-caption" class="muted"></p></div><button id="flow-packets" type="button" hidden>查看数据包</button></header>
+          <p id="flow-prompt" class="empty">选择一条 TCP 连接以查看重组字节流和 HTTP 事务。</p>
+          <div id="flow-details" hidden>
+            <div class="toolbar flow-toolbar">
+              <div class="button-group" aria-label="连接详情视图">
+                <button type="button" id="show-stream" aria-pressed="true">字节流</button>
+                <button type="button" id="show-http" aria-pressed="false">HTTP/1.1</button>
+              </div>
+              <button type="button" id="refresh-detail">刷新详情</button>
+            </div>
+            <section id="stream-view" class="flow-subview" aria-label="TCP 重组字节流">
+              <div class="sub-toolbar">
+                <label for="stream-direction">方向</label><select id="stream-direction"></select>
+                <label for="stream-format">显示</label><select id="stream-format"><option value="text">文本</option><option value="hex">十六进制</option></select>
+              </div>
+              <p class="sub-note" id="stream-note"></p>
+              <div class="stream-grid">
+                <div class="sub-panel">
+                  <h3>字节区间</h3><div id="stream-segments" class="stream-segments"></div>
+                  <div class="panel-footer"><span id="stream-offset"></span><div class="button-group"><button id="stream-prev" type="button" disabled>上一段</button><button id="stream-next" type="button" disabled>下一段</button></div></div>
+                </div>
+                <div class="sub-panel"><h3 id="stream-bytes-title">重组字节</h3><pre id="stream-bytes" class="stream-bytes"></pre></div>
+              </div>
+            </section>
+            <section id="http-view" class="flow-subview" aria-label="HTTP 事务" hidden>
+              <form id="http-filter" class="sub-toolbar">
+                <label for="http-method">方法</label><input id="http-method" placeholder="GET" maxlength="32">
+                <label for="http-status">状态码</label><input id="http-status" type="number" placeholder="200" min="100" max="999">
+                <button type="submit">应用</button>
+              </form>
+              <p class="sub-note" id="http-note"></p>
+              <div class="stream-grid">
+                <div class="sub-panel">
+                  <h3>请求与响应</h3><div id="http-messages" class="http-messages"></div>
+                  <div class="panel-footer"><span id="http-offset"></span><div class="button-group"><button id="http-prev" type="button" disabled>上一页</button><button id="http-next" type="button" disabled>下一页</button></div></div>
+                </div>
+                <div class="sub-panel"><h3>消息详情</h3><div id="http-detail" class="http-detail"></div></div>
+              </div>
+            </section>
+          </div>
+        </section>
       </div>
     </main>
   </div>
