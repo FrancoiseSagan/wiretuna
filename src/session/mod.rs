@@ -11,6 +11,8 @@ use std::{
 
 use crate::{
     capture::{BackendStats, PacketSource, SourceEvent},
+    decode::{Summary, summarize},
+    flow::{Flow, Tracker},
     packet::PacketRecord,
 };
 
@@ -67,12 +69,17 @@ pub struct Status {
     pub evicted: u64,
     pub input_dropped: u64,
     pub backend: Option<BackendStats>,
+    pub flows: usize,
+    pub newest_flow: u64,
+    pub evicted_flows: u64,
 }
 
 #[derive(Debug, Clone)]
 pub struct Entry {
     pub id: u64,
     pub packet: Arc<PacketRecord>,
+    pub summary: Summary,
+    pub flow_id: Option<u64>,
 }
 
 impl Entry {
@@ -92,6 +99,7 @@ struct Window {
     bytes: usize,
     backend: Option<BackendStats>,
     limits: Limits,
+    tracker: Tracker,
 }
 
 impl Window {
@@ -99,11 +107,14 @@ impl Window {
         self.entries.front().map_or(self.seen + 1, |entry| entry.id)
     }
 
-    fn append(&mut self, packet: PacketRecord) {
+    fn append(&mut self, packet: PacketRecord, summary: Summary) {
         self.seen += 1;
+        let flow_id = self.tracker.observe(self.seen, &packet, &summary);
         let entry = Entry {
             id: self.seen,
             packet: Arc::new(packet),
+            summary,
+            flow_id,
         };
         let bytes = entry.cost();
         while self.entries.len() == self.limits.retained_packets
@@ -162,6 +173,7 @@ impl Session {
                 bytes: 0,
                 backend: None,
                 limits,
+                tracker: Tracker::default(),
             }),
         });
         let state = Arc::clone(&shared);
@@ -194,6 +206,9 @@ impl Session {
             evicted: window.seen - window.entries.len() as u64,
             input_dropped: self.shared.queue.dropped(),
             backend: window.backend,
+            flows: window.tracker.count(),
+            newest_flow: window.tracker.newest_id(),
+            evicted_flows: window.tracker.evicted(),
         }
     }
 
@@ -215,6 +230,19 @@ impl Session {
             .take(limit)
             .cloned()
             .collect()
+    }
+
+    pub fn flow(&self, id: u64) -> Option<Flow> {
+        self.shared.window.lock().unwrap().tracker.flow(id)
+    }
+
+    pub fn flows(&self, after: u64, limit: usize) -> Vec<Flow> {
+        self.shared
+            .window
+            .lock()
+            .unwrap()
+            .tracker
+            .flows(after, limit)
     }
 
     pub fn wait(&mut self) {
@@ -252,7 +280,8 @@ fn ingest<S: PacketSource, E: Display>(
             })
             .map_err(|error| error.to_string())?;
         while let Some(packet) = shared.queue.pop() {
-            shared.window.lock().unwrap().append(packet);
+            let summary = summarize(&packet);
+            shared.window.lock().unwrap().append(packet, summary);
         }
         producer
             .join()
