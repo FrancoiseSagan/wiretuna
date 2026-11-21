@@ -1,3 +1,5 @@
+pub mod pcap;
+
 use crate::packet::PacketRecord;
 
 #[derive(Debug, PartialEq, Eq)]
