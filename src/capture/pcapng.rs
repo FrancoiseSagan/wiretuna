@@ -1,4 +1,7 @@
-//! Streaming reader for section and packet blocks in pcapng 1.0.
+//! Streaming reader and exporter for pcapng 1.0.
+
+mod export;
+pub use export::PcapNgExport;
 
 use std::io::Read;
 
@@ -6,7 +9,9 @@ use super::{
     PacketSource, SourceEvent,
     file::{ByteOrder, CaptureFileError, MAX_PACKET_BYTES, read_field},
 };
-use crate::packet::{LinkType, PacketRecord, Timestamp, TimestampResolution};
+use crate::packet::{
+    LinkType, PacketRecord, PcapNgInterface, PcapNgOrigin, Timestamp, TimestampResolution,
+};
 
 pub(super) const SECTION_MAGIC: [u8; 4] = [0x0a, 0x0d, 0x0d, 0x0a];
 const MAX_BLOCK_BYTES: usize = 16 * 1024 * 1024;
@@ -16,18 +21,15 @@ const MAX_SECTION_INTERFACES: usize = 65_536;
 struct Interface {
     id: u32,
     link: LinkType,
-    snaplen: u32,
-    resolution: TimestampResolution,
-    time_offset: i64,
-    fcs_length: Option<u8>,
+    metadata: PcapNgInterface,
 }
 
 impl Interface {
     fn packet_limit(self) -> u32 {
-        if self.snaplen == 0 {
+        if self.metadata.snaplen == 0 {
             u32::MAX
         } else {
-            self.snaplen
+            self.metadata.snaplen
         }
     }
 
@@ -36,7 +38,8 @@ impl Interface {
         captured: u32,
         original: u32,
         data: &[u8],
-        timestamp: Option<Timestamp>,
+        ticks: Option<u64>,
+        fcs_override: Option<u8>,
     ) -> Result<PacketRecord, &'static str> {
         if captured > MAX_PACKET_BYTES || captured > self.packet_limit() || captured > original {
             return Err("invalid captured packet length");
@@ -44,8 +47,28 @@ impl Interface {
         let payload = data
             .get(..captured as usize)
             .ok_or("incomplete packet data")?;
+        let timestamp = match ticks {
+            Some(ticks) => Some(
+                Timestamp::from_ticks(ticks, self.metadata.time_offset, self.metadata.resolution)
+                    .ok_or("packet timestamp is outside the supported range")?,
+            ),
+            None => None,
+        };
+        let fcs_length = fcs_override.or_else(|| {
+            self.metadata
+                .fcs_bits
+                .filter(|bits| bits.is_multiple_of(8))
+                .map(|bits| bits / 8)
+        });
         PacketRecord::new(self.id, self.link, timestamp, original, payload.into())
-            .map(|packet| packet.with_fcs_length(self.fcs_length))
+            .map(|packet| {
+                packet
+                    .with_fcs_length(fcs_length)
+                    .with_pcapng_origin(PcapNgOrigin {
+                        interface: self.metadata,
+                        ticks,
+                    })
+            })
             .map_err(|_| "invalid captured packet length")
     }
 }
@@ -56,6 +79,7 @@ pub struct PcapNgReader<R> {
     order: ByteOrder,
     interfaces: Vec<Interface>,
     next_interface: u64,
+    section_number: u64,
     body: Vec<u8>,
     finished: bool,
 }
@@ -68,6 +92,7 @@ impl<R: Read> PcapNgReader<R> {
             order: ByteOrder::Little,
             interfaces: Vec::new(),
             next_interface: 0,
+            section_number: 0,
             body: Vec::new(),
             finished: false,
         };
@@ -121,6 +146,7 @@ impl<R: Read> PcapNgReader<R> {
             }
             if kind == SECTION_MAGIC {
                 self.section(start)?;
+                self.section_number += 1;
                 continue;
             }
             let kind = self.order.u32(kind);
@@ -159,23 +185,27 @@ impl<R: Read> PcapNgReader<R> {
         let mut interface = Interface {
             id,
             link: LinkType(u16_at(self.order, &self.body, 0)),
-            snaplen: u32_at(self.order, &self.body, 4),
-            resolution: TimestampResolution::Microseconds,
-            time_offset: 0,
-            fcs_length: None,
+            metadata: PcapNgInterface {
+                section: self.section_number,
+                snaplen: u32_at(self.order, &self.body, 4),
+                resolution: TimestampResolution::Microseconds,
+                time_offset: 0,
+                fcs_bits: None,
+            },
         };
         for option in Options::new(&self.body[8..], self.order) {
             match option? {
-                (9, [6]) => interface.resolution = TimestampResolution::Microseconds,
-                (9, [9]) => interface.resolution = TimestampResolution::Nanoseconds,
+                (9, [6]) => interface.metadata.resolution = TimestampResolution::Microseconds,
+                (9, [9]) => interface.metadata.resolution = TimestampResolution::Nanoseconds,
                 (9, [value]) if value & 0x80 == 0 => {
-                    interface.resolution = TimestampResolution::Decimal(*value)
+                    interface.metadata.resolution = TimestampResolution::Decimal(*value)
                 }
-                (9, [value]) => interface.resolution = TimestampResolution::Binary(value & 0x7f),
-                (13, [value]) if value % 8 == 0 => interface.fcs_length = Some(value / 8),
-                (13, [_]) => {}
+                (9, [value]) => {
+                    interface.metadata.resolution = TimestampResolution::Binary(value & 0x7f)
+                }
+                (13, [bits]) => interface.metadata.fcs_bits = Some(*bits),
                 (14, value) if value.len() == 8 => {
-                    interface.time_offset = self.order.i64(value.try_into().unwrap());
+                    interface.metadata.time_offset = self.order.i64(value.try_into().unwrap());
                 }
                 (9 | 13 | 14, _) => return Err("invalid interface option length"),
                 _ => {}
@@ -199,18 +229,16 @@ impl<R: Read> PcapNgReader<R> {
             if captured > MAX_PACKET_BYTES || data.len() != padded_len(captured as usize) {
                 return Err("invalid Simple Packet Block length");
             }
-            return interface.packet(captured, original, data, None);
+            return interface.packet(captured, original, data, None, None);
         }
 
         let index = u32_at(order, &self.body, 0) as usize;
-        let mut interface = *self
+        let interface = *self
             .interfaces
             .get(index)
             .ok_or("unknown packet interface")?;
         let ticks = (u64::from(u32_at(order, &self.body, 4)) << 32)
             | u64::from(u32_at(order, &self.body, 8));
-        let timestamp = Timestamp::from_ticks(ticks, interface.time_offset, interface.resolution)
-            .ok_or("packet timestamp is outside the supported range")?;
         let captured = u32_at(order, &self.body, 12);
         if captured > MAX_PACKET_BYTES {
             return Err("packet exceeds the capture size limit");
@@ -221,12 +249,13 @@ impl<R: Read> PcapNgReader<R> {
             .body
             .get(options_at..)
             .ok_or("incomplete Enhanced Packet Block data or padding")?;
+        let mut fcs_override = None;
         for option in Options::new(options, order) {
             match option? {
                 (2, flags) if flags.len() == 4 => {
                     let length = ((u32_at(order, flags, 0) >> 5) & 0xf) as u8;
                     if length != 0 {
-                        interface.fcs_length = Some(length);
+                        fcs_override = Some(length);
                     }
                 }
                 (2, _) => return Err("invalid packet flags option length"),
@@ -237,7 +266,8 @@ impl<R: Read> PcapNgReader<R> {
             captured,
             original,
             &self.body[20..options_at],
-            Some(timestamp),
+            Some(ticks),
+            fcs_override,
         )
     }
 

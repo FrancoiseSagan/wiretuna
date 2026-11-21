@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use wiretuna::{
     capture::{
-        PacketSource, SourceEvent, offline::OfflineReader, pcap::PcapExport, pcapng::PcapNgReader,
+        PacketSource, SourceEvent,
+        offline::OfflineReader,
+        pcap::PcapExport,
+        pcapng::{PcapNgExport, PcapNgReader},
     },
     packet::{LinkType, PacketRecord, TimestampResolution},
 };
@@ -146,7 +149,19 @@ fn reads_multiple_interfaces_and_resets_indices_on_new_sections() {
     assert_eq!(last.interface_id(), 2);
     assert_eq!((timestamp.seconds(), timestamp.nanoseconds()), (1, 976_562));
     assert_eq!(timestamp.resolution(), TimestampResolution::Binary(10));
-    assert!(PcapExport::new(vec![Arc::new(last)]).is_err());
+    let packets = vec![Arc::new(first), Arc::new(simple), Arc::new(last)];
+    assert!(PcapExport::new(vec![Arc::clone(&packets[2])]).is_err());
+
+    let export = PcapNgExport::new(packets.clone()).unwrap();
+    let size = export.file_size();
+    let exported: Vec<u8> = export.flatten().collect();
+    assert_eq!(size, exported.len() as u64);
+    let mut reopened = PcapNgReader::new(exported.as_slice()).unwrap();
+    for packet in packets {
+        // Packet equality also verifies the original counter ticks and interface metadata.
+        assert_eq!(next(&mut reopened), *packet);
+    }
+    assert_eq!(reopened.next_packet().unwrap(), SourceEvent::End);
     assert_eq!(reader.next_packet().unwrap(), SourceEvent::End);
     assert_eq!(reader.interface_count(), 3);
 }
@@ -214,4 +229,65 @@ fn rejects_options_with_missing_padding_and_handles_finer_decimal_ticks() {
     let timestamp = packet.timestamp().unwrap();
     assert_eq!((timestamp.seconds(), timestamp.nanoseconds()), (-1, 0));
     assert_eq!(timestamp.resolution(), TimestampResolution::Decimal(38));
+}
+
+#[test]
+fn preserves_per_packet_fcs_overrides_and_simple_packet_capture_lengths() {
+    let order = Order::BE;
+    let mut file = order.section();
+    file.extend(order.interface(1, 5, &[(13, &[32]), (14, &order.i64(-1))]));
+    let mut enhanced = order.enhanced(0, 400_000, 8, b"abcde");
+    enhanced.truncate(enhanced.len() - 4);
+    enhanced.extend(order.u16(2));
+    enhanced.extend(order.u16(4));
+    enhanced.extend(order.u32(2 << 5));
+    enhanced.extend([0; 4]);
+    let size = (enhanced.len() + 4) as u32;
+    enhanced[4..8].copy_from_slice(&order.u32(size));
+    enhanced.extend(order.u32(size));
+    file.extend(enhanced);
+    let mut body = Vec::from(order.u32(10));
+    body.extend(b"fghij");
+    pad(&mut body);
+    file.extend(order.block(3, &body));
+
+    let mut source = PcapNgReader::new(file.as_slice()).unwrap();
+    let packets = vec![Arc::new(next(&mut source)), Arc::new(next(&mut source))];
+    let bytes: Vec<u8> = PcapNgExport::new(packets.clone())
+        .unwrap()
+        .flatten()
+        .collect();
+    let mut source = PcapNgReader::new(bytes.as_slice()).unwrap();
+    for packet in packets {
+        assert_eq!(next(&mut source), *packet);
+    }
+    assert_eq!(source.next_packet().unwrap(), SourceEvent::End);
+}
+
+#[test]
+fn writes_multiple_link_types_and_initial_interface_for_timestamp_free_packets() {
+    use wiretuna::packet::Timestamp;
+    let timestamp = Timestamp::from_fraction(42, 11, TimestampResolution::Microseconds);
+    let packets = vec![
+        Arc::new(PacketRecord::new(7, LinkType(101), timestamp, 2, Box::new([1, 2])).unwrap()),
+        Arc::new(PacketRecord::new(13, LinkType(1), None, 8, Box::new([3, 4, 5])).unwrap()),
+    ];
+    let bytes: Vec<u8> = PcapNgExport::new(packets).unwrap().flatten().collect();
+    let mut source = PcapNgReader::new(bytes.as_slice()).unwrap();
+
+    let timed = next(&mut source);
+    assert_eq!(
+        (timed.interface_id(), timed.link_type(), timed.timestamp()),
+        (1, LinkType(101), timestamp)
+    );
+    let simple = next(&mut source);
+    assert_eq!(
+        (simple.interface_id(), simple.link_type()),
+        (0, LinkType(1))
+    );
+    assert_eq!(
+        (simple.bytes(), simple.original_len(), simple.timestamp()),
+        (&[3, 4, 5][..], 8, None)
+    );
+    assert_eq!(source.next_packet().unwrap(), SourceEvent::End);
 }

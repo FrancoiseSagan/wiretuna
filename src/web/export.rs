@@ -8,7 +8,7 @@ use axum::{
 };
 use serde::Deserialize;
 
-use crate::capture::pcap::PcapExport;
+use crate::capture::{pcap::PcapExport, pcapng::PcapNgExport};
 
 use super::{ApiError, service::Service};
 
@@ -21,7 +21,41 @@ pub(super) struct ExportRange {
 pub(super) async fn pcap(
     State(service): State<Arc<Service>>,
     Path(id): Path<u64>,
-    Query(ExportRange { first, last }): Query<ExportRange>,
+    Query(range): Query<ExportRange>,
+) -> Result<Response, ApiError> {
+    download(service, id, range, Format::Pcap)
+}
+
+pub(super) async fn pcapng(
+    State(service): State<Arc<Service>>,
+    Path(id): Path<u64>,
+    Query(range): Query<ExportRange>,
+) -> Result<Response, ApiError> {
+    download(service, id, range, Format::PcapNg)
+}
+
+#[derive(Clone, Copy)]
+enum Format {
+    Pcap,
+    PcapNg,
+}
+
+impl Format {
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Pcap => "pcap",
+            Self::PcapNg => "pcapng",
+        }
+    }
+}
+
+type Blocks = Box<dyn Iterator<Item = Vec<u8>> + Send>;
+
+fn download(
+    service: Arc<Service>,
+    id: u64,
+    ExportRange { first, last }: ExportRange,
+    format: Format,
 ) -> Result<Response, ApiError> {
     if first == 0 || last < first {
         return Err(ApiError::bad("Invalid packet export range."));
@@ -33,7 +67,7 @@ pub(super) async fn pcap(
             ApiError::new(
                 StatusCode::TOO_MANY_REQUESTS,
                 "export_in_progress",
-                "Another pcap export is in progress.",
+                "Another capture export is in progress.",
             )
         })?;
     let packets = active
@@ -46,14 +80,17 @@ pub(super) async fn pcap(
                 "The requested packets are no longer available. Try the current retained range.",
             )
         })?;
-    let export = PcapExport::new(packets).map_err(|error| {
-        ApiError::new(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "pcap_unrepresentable",
-            error.to_string(),
-        )
-    })?;
-    let size = export.file_size();
+    let (size, export): (u64, Blocks) = match format {
+        Format::Pcap => {
+            let writer = PcapExport::new(packets).map_err(unrepresentable)?;
+            (writer.file_size(), Box::new(writer))
+        }
+        Format::PcapNg => {
+            let writer = PcapNgExport::new(packets).map_err(unrepresentable)?;
+            (writer.file_size(), Box::new(writer))
+        }
+    };
+    let extension = format.extension();
     let stream =
         futures_util::stream::unfold((export, permit), |(mut export, permit)| async move {
             let bytes = export.next()?;
@@ -65,10 +102,20 @@ pub(super) async fn pcap(
             (header::CONTENT_LENGTH, size.to_string()),
             (
                 header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"wiretuna-session-{id}-{first}-{last}.pcap\""),
+                format!(
+                    "attachment; filename=\"wiretuna-session-{id}-{first}-{last}.{extension}\""
+                ),
             ),
         ],
         Body::from_stream(stream),
     )
         .into_response())
+}
+
+fn unrepresentable(error: std::io::Error) -> ApiError {
+    ApiError::new(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "pcap_unrepresentable",
+        error.to_string(),
+    )
 }

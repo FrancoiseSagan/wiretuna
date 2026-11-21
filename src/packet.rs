@@ -89,6 +89,21 @@ impl Timestamp {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PcapNgInterface {
+    pub section: u64,
+    pub snaplen: u32,
+    pub resolution: TimestampResolution,
+    pub time_offset: i64,
+    pub fcs_bits: Option<u8>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PcapNgOrigin {
+    pub interface: PcapNgInterface,
+    pub ticks: Option<u64>,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct PacketRecord {
     interface_id: u32,
@@ -96,6 +111,7 @@ pub struct PacketRecord {
     timestamp: Option<Timestamp>,
     original_len: u32,
     fcs_length: Option<u8>,
+    pcapng: Option<PcapNgOrigin>,
     bytes: Box<[u8]>,
 }
 
@@ -119,6 +135,7 @@ impl PacketRecord {
             timestamp,
             original_len,
             fcs_length: None,
+            pcapng: None,
             bytes,
         })
     }
@@ -130,6 +147,15 @@ impl PacketRecord {
 
     pub(crate) fn fcs_length(&self) -> Option<u8> {
         self.fcs_length
+    }
+
+    pub(crate) fn with_pcapng_origin(mut self, origin: PcapNgOrigin) -> Self {
+        self.pcapng = Some(origin);
+        self
+    }
+
+    pub(crate) fn pcapng_origin(&self) -> Option<PcapNgOrigin> {
+        self.pcapng
     }
 
     pub fn interface_id(&self) -> u32 {

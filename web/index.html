@@ -38,7 +38,12 @@
           <button id="clear" type="button" disabled>清除会话</button>
         </div>
         <div class="session-export">
-          <button id="export-pcap" type="button" aria-describedby="export-range" disabled>导出抓包（pcap）</button>
+          <label for="export-format" class="muted">导出格式</label>
+          <select id="export-format" disabled>
+            <option value="pcapng">pcapng</option>
+            <option value="pcap">pcap</option>
+          </select>
+          <button id="export-capture" type="button" aria-describedby="export-range" disabled>导出抓包</button>
           <p id="export-range" class="muted"></p>
         </div>
         <p id="capture-note" class="muted"></p>

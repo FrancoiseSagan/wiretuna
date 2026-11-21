@@ -86,7 +86,9 @@ function renderStatus() {
   byId('stop').disabled = !status || finished || phase === 'stopping' || mutating;
   byId('clear').disabled = !finished || mutating;
   const range = exporting ?? status;
-  byId('export-pcap').disabled = Boolean(exporting) || !status?.retained;
+  const exportDisabled = Boolean(exporting) || !status?.retained;
+  byId('export-format').disabled = exportDisabled;
+  byId('export-capture').disabled = exportDisabled;
   byId('export-range').textContent = range?.retained
     ? `${range.retained} 包 · #${range.first}–#${range.seen}`
     : '';
@@ -136,19 +138,20 @@ byId('clear').addEventListener('click', () => mutate(async () => {
   await request(sessionPath(status.id), { method: 'DELETE' });
   setStatus(null);
 }));
-byId('export-pcap').addEventListener('click', async () => {
+byId('export-capture').addEventListener('click', async () => {
   if (exporting || !status?.retained) return;
   const { id, first, seen: last } = status;
   const parameters = query({ first, last });
+  const format = byId('export-format').value;
   exporting = status;
   notice();
   renderStatus();
   try {
-    const download = await request(sessionPath(id, `/export.pcap?${parameters}`));
+    const download = await request(sessionPath(id, `/export.${format}?${parameters}`));
     const url = URL.createObjectURL(await download.blob());
     const link = el('a');
     link.href = url;
-    link.download = `wiretuna-session-${id}-${first}-${last}.pcap`;
+    link.download = `wiretuna-session-${id}-${first}-${last}.${format}`;
     document.body.append(link);
     link.click();
     link.remove();

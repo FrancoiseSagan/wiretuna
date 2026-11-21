@@ -90,6 +90,13 @@ def check(binary, file, classic):
         assert export[:16] == classic[:16]
         assert export[20:] == classic[20:]
         request(base + "/export.pcap?first=1&last=2", expected=409)
+        exported_pcapng = request(base + "/export.pcapng?first=1&last=1")
+        assert exported_pcapng.startswith(bytes.fromhex("0a0d0d0a"))
+        output = file.parent / "exported.pcapng"
+        output.write_bytes(exported_pcapng)
+        report = subprocess.check_output([binary, "inspect", "--packets", str(output)], text=True)
+        assert "format: pcapng" in report and "packets: 1" in report
+        assert "\t1700000000.123456000\t" in report
         request(base, method="DELETE", expected=403)
 
         events = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
