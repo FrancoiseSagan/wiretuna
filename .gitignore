@@ -1,0 +1,9 @@
+# Rust build output
+/target/
+
+# Local development plans and packet captures
+/.local/
+/captures/
+
+# Local OS metadata
+.DS_Store
