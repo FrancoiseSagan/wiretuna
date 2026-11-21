@@ -4,6 +4,7 @@ mod api;
 mod assets;
 mod export;
 mod flows;
+mod protocols;
 mod service;
 
 use std::{
@@ -98,6 +99,10 @@ fn router(service: Arc<Service>) -> Router {
         .route("/api/v1/events", get(api::events))
         .route("/api/v1/sessions/{id}/flows", get(flows::list))
         .route("/api/v1/sessions/{id}/flows/{flow_id}", get(flows::get))
+        .route(
+            "/api/v1/sessions/{id}/flows/{flow_id}/protocols",
+            get(protocols::get),
+        )
         .route(
             "/api/v1/sessions/{id}/flows/{flow_id}/segments",
             get(flows::segments),

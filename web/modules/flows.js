@@ -1,6 +1,7 @@
 import { json, query, sessionPath } from './api.js';
 import { byId, el, utc } from './dom.js';
 import { HttpView } from './flow-http.js';
+import { ProtocolView } from './flow-protocols.js';
 import { StreamView } from './flow-stream.js';
 
 const PAGE_SIZE = 100;
@@ -15,6 +16,7 @@ export class FlowList {
     this.onPacketFilter = onPacketFilter;
     this.stream = new StreamView({ onError, onPacket });
     this.http = new HttpView({ onError, onPacket });
+    this.protocols = new ProtocolView({ onError, onPacket });
     this.rows = byId('flow-list');
     this.serial = 0;
     this.selection = 0;
@@ -29,8 +31,9 @@ export class FlowList {
       this.history.push(this.start);
       this.load(this.cursor);
     });
-    byId('show-stream').addEventListener('click', () => this.show('stream'));
-    byId('show-http').addEventListener('click', () => this.show('http'));
+    for (const view of ['stream', 'http', 'protocols']) {
+      byId(`show-${view}`).addEventListener('click', () => this.show(view));
+    }
     byId('flow-packets').addEventListener('click', () => {
       if (this.selected) this.onPacketFilter(this.selected);
     });
@@ -69,6 +72,7 @@ export class FlowList {
     this.flow = null;
     this.stream.reset();
     this.http.reset();
+    this.protocols.reset();
     byId('flow-packets').hidden = true;
     byId('flow-prompt').hidden = false;
     byId('flow-details').hidden = true;
@@ -136,6 +140,7 @@ export class FlowList {
       byId('flow-caption').textContent = `#${id} · ${sides.join(' · ')}${time}${note}`;
       this.stream.reset();
       this.http.reset();
+      this.protocols.reset();
       this.show(this.view);
     } catch (error) {
       if (serial === this.selection) this.onError(error.message);
@@ -145,12 +150,11 @@ export class FlowList {
   show(view) {
     if (!this.flow) return;
     this.view = view;
-    const stream = view === 'stream';
-    byId('show-stream').setAttribute('aria-pressed', String(stream));
-    byId('show-http').setAttribute('aria-pressed', String(!stream));
-    byId('stream-view').hidden = !stream;
-    byId('http-view').hidden = stream;
-    if (stream && !this.stream.path) this.stream.setFlow(this.path, this.flow);
-    if (!stream && !this.http.path) this.http.setFlow(this.path);
+    for (const name of ['stream', 'http', 'protocols']) {
+      const selected = name === view;
+      byId(`show-${name}`).setAttribute('aria-pressed', String(selected));
+      byId(`${name}-view`).hidden = !selected;
+    }
+    if (!this[view].path) this[view].setFlow(this.path, this.flow);
   }
 }

@@ -67,6 +67,12 @@ retained body. It follows the HTTP charset when present and lets you choose
 another charset. The browser decompresses
 supported content encodings up to 1 MiB of output.
 
+The DNS / TLS tab shows length-prefixed DNS queries and responses on TCP port
+53 and visible TLS ClientHello and ServerHello fields. It follows the retained
+TCP bytes up to the first gap in each direction. Each message links to the
+packet containing its start. TLS details include visible server names, ALPN,
+versions and cipher suites.
+
 ### Release build with live capture
 
 On Linux, build both programs with

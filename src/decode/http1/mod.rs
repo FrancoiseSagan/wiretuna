@@ -2,6 +2,7 @@
 
 mod framing;
 
+use super::stream::Prefix;
 use crate::flow::{Flow, StreamSnapshot};
 use framing::{Body, Framing};
 
@@ -69,9 +70,9 @@ fn analyze_selected(
     body_target: Option<(usize, u64)>,
 ) -> Report {
     let prefixes = streams.each_ref().map(Prefix::new);
-    let client = if prefixes[0].looks_like_request() {
+    let client = if looks_like_request(&prefixes[0]) {
         Some(0)
-    } else if prefixes[1].looks_like_request() {
+    } else if looks_like_request(&prefixes[1]) {
         Some(1)
     } else {
         flow.initiator
@@ -146,49 +147,14 @@ fn analyze_selected(
     report
 }
 
-struct Prefix {
-    bytes: Vec<u8>,
-    sources: Vec<(usize, u64)>,
-    finished: bool,
-    incomplete: bool,
-}
-
-impl Prefix {
-    fn new(snapshot: &StreamSnapshot) -> Self {
-        let mut prefix = Self {
-            bytes: Vec::new(),
-            sources: Vec::new(),
-            finished: false,
-            incomplete: false,
-        };
-        for chunk in &snapshot.chunks {
-            if chunk.offset != prefix.bytes.len() as u64 {
-                break;
-            }
-            prefix.bytes.extend_from_slice(&chunk.bytes);
-            prefix.sources.push((prefix.bytes.len(), chunk.packet_id));
-        }
-        prefix.incomplete = (prefix.bytes.len() as u64) < snapshot.observed_end;
-        prefix.finished =
-            snapshot.fin_offset == Some(prefix.bytes.len() as u64) && !prefix.incomplete;
-        prefix
-    }
-
-    fn packet_at(&self, byte: usize) -> u64 {
-        self.sources
-            .get(self.sources.partition_point(|(end, _)| *end <= byte))
-            .map_or(0, |(_, packet)| *packet)
-    }
-
-    fn looks_like_request(&self) -> bool {
-        let limit = self.bytes.len().min(MAX_HEAD_BYTES);
-        let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
-        let mut request = httparse::Request::new(&mut headers);
-        matches!(
-            request.parse(&self.bytes[..limit]),
-            Ok(httparse::Status::Complete(_))
-        ) && request.version == Some(1)
-    }
+fn looks_like_request(prefix: &Prefix) -> bool {
+    let limit = prefix.bytes.len().min(MAX_HEAD_BYTES);
+    let mut headers = [httparse::EMPTY_HEADER; MAX_HEADERS];
+    let mut request = httparse::Request::new(&mut headers);
+    matches!(
+        request.parse(&prefix.bytes[..limit]),
+        Ok(httparse::Status::Complete(_))
+    ) && request.version == Some(1)
 }
 
 #[derive(Clone, Copy)]

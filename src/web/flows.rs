@@ -290,7 +290,7 @@ fn snapshot(
     Ok(if direction == 0 { left } else { right })
 }
 
-fn flow_missing(active: &Active, id: u64) -> ApiError {
+pub(super) fn flow_missing(active: &Active, id: u64) -> ApiError {
     if id > 0 && id <= active.session.status().newest_flow {
         ApiError::new(
             StatusCode::GONE,

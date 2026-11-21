@@ -123,12 +123,13 @@
         </section>
         <section class="panel flow-panel" aria-labelledby="flow-detail-title">
           <header class="panel-heading"><div><h2 id="flow-detail-title">连接详情</h2><p id="flow-caption" class="muted"></p></div><button id="flow-packets" type="button" hidden>查看数据包</button></header>
-          <p id="flow-prompt" class="empty">选择一条 TCP 连接以查看重组字节流和 HTTP 事务。</p>
+          <p id="flow-prompt" class="empty">选择一条 TCP 连接以查看字节流与协议解析。</p>
           <div id="flow-details" hidden>
             <div class="toolbar flow-toolbar">
               <div class="button-group" aria-label="连接详情视图">
                 <button type="button" id="show-stream" aria-pressed="true">字节流</button>
                 <button type="button" id="show-http" aria-pressed="false">HTTP/1.1</button>
+                <button type="button" id="show-protocols" aria-pressed="false">DNS / TLS</button>
               </div>
               <button type="button" id="refresh-detail">刷新详情</button>
             </div>
@@ -159,6 +160,13 @@
                   <div class="panel-footer"><span id="http-offset"></span><div class="button-group"><button id="http-prev" type="button" disabled>上一页</button><button id="http-next" type="button" disabled>下一页</button></div></div>
                 </div>
                 <div class="sub-panel"><h3>消息详情</h3><div id="http-detail" class="http-detail"></div></div>
+              </div>
+            </section>
+            <section id="protocols-view" class="flow-subview" aria-label="TCP DNS 与 TLS" hidden>
+              <p class="sub-note" id="protocol-note" role="status"></p>
+              <div class="stream-grid">
+                <div class="sub-panel"><h3>协议消息</h3><div id="protocol-messages" class="http-messages"></div></div>
+                <div class="sub-panel"><h3>消息详情</h3><div id="stream-protocol-detail" class="http-detail"></div></div>
               </div>
             </section>
           </div>

@@ -4,6 +4,9 @@ mod dns;
 pub mod http1;
 mod ip;
 mod link;
+pub mod protocols;
+mod stream;
+mod tls;
 mod transport;
 
 use std::{fmt::Display, net::IpAddr};
