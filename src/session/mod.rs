@@ -12,7 +12,7 @@ use std::{
 use crate::{
     capture::{BackendStats, PacketSource, SourceEvent},
     decode::{Summary, summarize},
-    flow::{Flow, Tracker},
+    flow::{Flow, StreamSnapshot, Tracker},
     packet::PacketRecord,
 };
 
@@ -72,6 +72,7 @@ pub struct Status {
     pub flows: usize,
     pub newest_flow: u64,
     pub evicted_flows: u64,
+    pub stream_bytes: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -209,6 +210,7 @@ impl Session {
             flows: window.tracker.count(),
             newest_flow: window.tracker.newest_id(),
             evicted_flows: window.tracker.evicted(),
+            stream_bytes: window.tracker.stream_bytes(),
         }
     }
 
@@ -243,6 +245,11 @@ impl Session {
             .unwrap()
             .tracker
             .flows(after, limit)
+    }
+
+    pub fn streams(&self, id: u64) -> Option<(Flow, [StreamSnapshot; 2])> {
+        let window = self.shared.window.lock().unwrap();
+        Some((window.tracker.flow(id)?, window.tracker.streams(id)?))
     }
 
     pub fn wait(&mut self) {

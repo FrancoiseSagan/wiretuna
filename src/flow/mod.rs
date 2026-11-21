@@ -1,5 +1,10 @@
 //! TCP connection tracking within a capture session.
 
+mod reassembly;
+
+use reassembly::Stream;
+pub use reassembly::{Chunk, StreamSnapshot};
+
 use std::{
     collections::{BTreeMap, HashMap},
     net::SocketAddr,
@@ -12,6 +17,7 @@ use crate::{
 };
 
 const MAX_FLOWS: usize = 8192;
+const STREAM_BUDGET: usize = 24 * 1024 * 1024;
 const FIN: u16 = 0x01;
 const SYN: u16 = 0x02;
 const RST: u16 = 0x04;
@@ -75,6 +81,7 @@ struct Connection {
     flow: Flow,
     key: Key,
     initial_sequence: [Option<u32>; 2],
+    streams: [Stream; 2],
 }
 
 #[derive(Default)]
@@ -83,6 +90,7 @@ pub struct Tracker {
     current: HashMap<Key, u64>,
     next_id: u64,
     evicted: u64,
+    stream_bytes: usize,
 }
 
 impl Tracker {
@@ -117,6 +125,14 @@ impl Tracker {
             .unwrap_or_else(|| self.create(key, packet_id, packet.timestamp(), opens, direction));
 
         let connection = self.connections.get_mut(&id).unwrap();
+        let payload = &packet.bytes()
+            [segment.payload_offset..segment.payload_offset + segment.captured_payload_len];
+        self.stream_bytes += connection.streams[direction].observe(
+            packet_id,
+            segment,
+            payload,
+            STREAM_BUDGET - self.stream_bytes,
+        );
         let flow = &mut connection.flow;
         let counters = &mut flow.directions[direction];
         counters.packets = counters.packets.saturating_add(1);
@@ -161,6 +177,7 @@ impl Tracker {
             if self.current.get(&connection.key) == Some(&id) {
                 self.current.remove(&connection.key);
             }
+            self.stream_bytes -= connection.streams.iter().map(Stream::cost).sum::<usize>();
             self.evicted += 1;
         }
         self.next_id += 1;
@@ -188,6 +205,7 @@ impl Tracker {
                 flow,
                 key,
                 initial_sequence: [None; 2],
+                streams: Default::default(),
             },
         );
         id
@@ -203,6 +221,15 @@ impl Tracker {
             .take(limit)
             .map(|(_, connection)| connection.flow)
             .collect()
+    }
+
+    pub fn streams(&self, id: u64) -> Option<[StreamSnapshot; 2]> {
+        let connection = self.connections.get(&id)?;
+        Some(connection.streams.each_ref().map(Stream::snapshot))
+    }
+
+    pub fn stream_bytes(&self) -> usize {
+        self.stream_bytes
     }
 
     pub fn count(&self) -> usize {
