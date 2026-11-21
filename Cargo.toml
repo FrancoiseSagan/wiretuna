@@ -1,5 +1,6 @@
 [package]
 name = "wiretuna"
+default-run = "wiretuna"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.92"
@@ -15,3 +16,8 @@ pcap = { version = "2.5.0", optional = true }
 
 [features]
 live-capture = ["dep:pcap", "dep:ctrlc", "dep:nix"]
+
+[[bin]]
+name = "wiretuna-capture"
+path = "src/bin/wiretuna-capture.rs"
+required-features = ["live-capture"]

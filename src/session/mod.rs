@@ -338,6 +338,7 @@ fn produce<S: PacketSource, E: Display>(
             next_stats = Instant::now() + Duration::from_secs(1);
         }
     };
+    source.stop();
     if mode == Mode::Live {
         let stats = source.backend_stats();
         if stats.is_some() {

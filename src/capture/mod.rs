@@ -1,4 +1,6 @@
 #[cfg(all(target_os = "linux", feature = "live-capture"))]
+pub mod helper;
+#[cfg(all(target_os = "linux", feature = "live-capture"))]
 pub mod live;
 pub mod pcap;
 
@@ -24,6 +26,9 @@ pub trait PacketSource {
     type Error: std::error::Error;
 
     fn next_packet(&mut self) -> Result<SourceEvent, Self::Error>;
+
+    /// Releases a running source and makes its final backend statistics available.
+    fn stop(&mut self) {}
 
     fn backend_stats(&mut self) -> Option<BackendStats> {
         None
