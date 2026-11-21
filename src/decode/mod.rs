@@ -1,6 +1,7 @@
 //! Bounded, slice-based protocol decoding shared by all capture sources.
 
 mod dns;
+pub mod http1;
 mod ip;
 mod link;
 mod transport;

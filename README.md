@@ -2,7 +2,7 @@
 
 Wiretuna is a lightweight network packet analyzer written in Rust. The CLI inspects
 classic pcap 2.4 files and can capture packets on a single Linux interface.
-The offline build uses only the Rust standard library.
+The offline build runs without libpcap.
 
 ```sh
 cargo run --locked -- inspect capture.pcap
