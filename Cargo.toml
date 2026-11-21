@@ -8,6 +8,11 @@ description = "A lightweight network packet analyzer"
 
 [dependencies]
 httparse = "1.10.1"
+axum = { version = "0.8.9", optional = true, default-features = false, features = ["http1", "json", "query", "tokio"] }
+futures-util = { version = "0.3", optional = true, default-features = false, features = ["std"] }
+serde = { version = "1", optional = true, features = ["derive"] }
+serde_json = { version = "1", optional = true }
+tokio = { version = "1", optional = true, features = ["net", "rt-multi-thread", "signal", "sync", "time"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ctrlc = { version = "3.5.0", optional = true }
@@ -15,6 +20,7 @@ nix = { version = "0.32", optional = true, default-features = false, features = 
 pcap = { version = "2.5.0", optional = true }
 
 [features]
+web = ["dep:axum", "dep:futures-util", "dep:serde", "dep:serde_json", "dep:tokio"]
 live-capture = ["dep:pcap", "dep:ctrlc", "dep:nix"]
 
 [[bin]]

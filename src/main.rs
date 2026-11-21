@@ -1,6 +1,8 @@
 mod inspect;
 #[cfg(all(target_os = "linux", feature = "live-capture"))]
 mod live_cli;
+#[cfg(feature = "web")]
+mod web_cli;
 
 use std::{env, ffi::OsString, io, path::Path, process::ExitCode};
 
@@ -38,6 +40,12 @@ fn main() -> ExitCode {
         [command, rest @ ..] if command == "capture" => {
             return live_result(live_cli::capture(rest));
         }
+        #[cfg(feature = "web")]
+        [command, flag] if command == "serve" && (flag == "-h" || flag == "--help") => {
+            println!("Usage:\n{}", web_cli::HELP);
+        }
+        #[cfg(feature = "web")]
+        [command, rest @ ..] if command == "serve" => return web_cli::run(rest),
         _ => return usage_error(),
     }
     ExitCode::SUCCESS
@@ -45,6 +53,8 @@ fn main() -> ExitCode {
 
 fn print_help() {
     println!("{HELP}");
+    #[cfg(feature = "web")]
+    println!("\nLocal Web service:\n{}", web_cli::HELP);
     #[cfg(all(target_os = "linux", feature = "live-capture"))]
     println!("\n{}", live_cli::HELP);
 }
