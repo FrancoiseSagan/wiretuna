@@ -1,12 +1,13 @@
 import { el } from './dom.js';
 
+const PREVIEW_BYTES = 256;
 const DECOMPRESSED_LIMIT = 1024 * 1024;
 const charsets = [
   ['', '自动'], ['utf-8', 'UTF-8'], ['gb18030', 'GB18030 / GBK'],
   ['big5', 'Big5'], ['utf-16le', 'UTF-16 LE'], ['utf-16be', 'UTF-16 BE'],
 ];
 
-export function bodyPanel(bytes, headers) {
+export function bodyPanel(message, loadBody) {
   const panel = el('section', '', 'http-body');
   const toolbar = el('div', '', 'sub-toolbar');
   const label = el('label', '字符集');
@@ -18,45 +19,84 @@ export function bodyPanel(bytes, headers) {
     choice.append(option);
   }
   label.append(choice);
+  const toggle = el('button', '查看完整正文');
+  toggle.type = 'button';
+  toggle.setAttribute('aria-expanded', 'false');
   const note = el('p', '', 'muted');
   const text = el('pre');
-  toolbar.append(label);
+  toolbar.append(label, toggle);
   panel.append(toolbar, note, text);
 
-  const declared = declaredCharset(headers);
-  async function show() {
-    let decoded;
+  const declared = declaredCharset(message.headers);
+  const encodings = contentEncodings(message.headers);
+  const preview = new Uint8Array(message.preview);
+  let full = null;
+  let expanded = false;
+
+  function render() {
+    const bytes = full?.bytes ?? preview;
+    const displayed = expanded ? bytes : bytes.subarray(0, PREVIEW_BYTES);
+    const hasMore = full ? bytes.length > PREVIEW_BYTES : preview.length < message.body_bytes;
+    toggle.hidden = !expanded && !hasMore;
+    toggle.textContent = expanded ? '收起正文' : '查看完整正文';
+    toggle.setAttribute('aria-expanded', String(expanded));
+
+    const clipped = !expanded && hasMore;
+    const caption = clipped ? '正文开头' : '正文';
+    const limit = full?.limited && expanded ? ' · 已达到 1 MiB 解压显示上限' : '';
+    const charset = choice.value || declared || 'utf-8';
+    let decoder;
     try {
-      decoded = await decompress(bytes, headers);
-    } catch (error) {
-      note.textContent = error.message;
-      choice.disabled = true;
+      decoder = new TextDecoder(charset, { fatal: true });
+    } catch {
+      note.textContent = `无法识别字符集 ${charset}，请选择字符集。`;
+      text.textContent = '';
       return;
     }
-    const render = () => {
-      const charset = choice.value || declared || 'utf-8';
-      let decoder;
-      try {
-        decoder = new TextDecoder(charset, { fatal: true });
-      } catch {
-        note.textContent = `无法识别字符集 ${charset}，请选择字符集。`;
-        text.textContent = '';
-        return;
+    const options = { stream: clipped || Boolean(full?.limited) };
+    try {
+      text.textContent = decoder.decode(displayed, options);
+      note.textContent = `${caption} · ${decoder.encoding}${limit}`;
+    } catch {
+      text.textContent = new TextDecoder(charset).decode(displayed, options);
+      note.textContent = `${caption} · ${decoder.encoding} 有无法解码的字节，可手动切换字符集。${limit}`;
+    }
+  }
+
+  async function loadFull() {
+    toggle.disabled = true;
+    try {
+      full = await decompress(await loadBody(), encodings);
+      return true;
+    } catch (error) {
+      note.textContent = error.message;
+      return false;
+    } finally {
+      toggle.disabled = false;
+    }
+  }
+
+  choice.addEventListener('change', render);
+  toggle.addEventListener('click', async () => {
+    if (!expanded && !full && !(await loadFull())) return;
+    expanded = !expanded;
+    render();
+  });
+
+  if (encodings.length) {
+    toggle.hidden = true;
+    choice.disabled = true;
+    note.textContent = '正在解压正文开头…';
+    loadFull().then(loaded => {
+      if (loaded) {
+        choice.disabled = false;
+        render();
       }
-      try {
-        text.textContent = decoder.decode(decoded.bytes, { stream: decoded.limited });
-        note.textContent = decoded.limited
-          ? `已达到 1 MiB 解压显示上限 · ${decoder.encoding}` : decoder.encoding;
-      } catch {
-        text.textContent = new TextDecoder(charset).decode(decoded.bytes, { stream: decoded.limited });
-        note.textContent = `${decoder.encoding} 有无法解码的字节，可手动切换字符集。`;
-        if (decoded.limited) note.textContent += ' 已达到 1 MiB 解压显示上限。';
-      }
-    };
-    choice.addEventListener('change', render);
+    });
+  } else {
+    if (preview.length >= message.body_bytes) full = { bytes: preview, limited: false };
     render();
   }
-  show();
   return panel;
 }
 
@@ -66,10 +106,13 @@ function declaredCharset(headers) {
   return (charset?.[1] ?? charset?.[2] ?? '').trim();
 }
 
-async function decompress(bytes, headers) {
-  const encodings = headers.filter(header => header.name.toLowerCase() === 'content-encoding')
+function contentEncodings(headers) {
+  return headers.filter(header => header.name.toLowerCase() === 'content-encoding')
     .flatMap(header => header.value.toLowerCase().split(',').map(value => value.trim()))
     .filter(value => value && value !== 'identity').reverse();
+}
+
+async function decompress(bytes, encodings) {
   if (encodings.length > 4) throw new Error('正文压缩层数超过显示上限。');
   let result = { bytes, limited: false };
   for (const [index, encoding] of encodings.entries()) {

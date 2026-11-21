@@ -99,11 +99,10 @@ export class HttpView {
       this.detail.replaceChildren(title, source, headers, summary);
       if (message.issue) this.detail.append(el('p', message.issue, 'sub-note'));
       if (message.body_bytes > 0) {
-        const response = await request(`${path}/body`);
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        if (serial !== this.detailSerial) return;
-        summary.textContent = `已捕获正文 ${bytes.length} B`;
-        this.detail.append(bodyPanel(bytes, message.headers));
+        this.detail.append(bodyPanel(message, async () => {
+          const response = await request(`${path}/body`);
+          return new Uint8Array(await response.arrayBuffer());
+        }));
       }
     } catch (error) {
       if (serial === this.detailSerial) this.onError(error.message);
