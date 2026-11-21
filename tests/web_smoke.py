@@ -52,7 +52,11 @@ def check(binary, file):
 
         assert b"Wiretuna" in request("/")
         assert b"PacketList" in request("/assets/packets.js")
-        request("/api/v1/sessions", headers={"Host": "wrong.example"}, expected=403)
+        for invalid_host in ("wrong.example", "localhost.wrong.example", "localhost:99999"):
+            request("/api/v1/sessions", headers={"Host": invalid_host}, expected=403)
+        forwarded_host = "localhost:62634" if port != 62634 else "localhost:62635"
+        forwarded_origin = "http://" + forwarded_host
+        assert b"Wiretuna" in request("/", headers={"Host": forwarded_host})
         for _ in range(100):
             capture = request("/api/v1/sessions")["sessions"][0]
             if capture["phase"] == "finished":
@@ -72,7 +76,14 @@ def check(binary, file):
         events.request("GET", base + "/events")
         response = events.getresponse()
         assert response.readline() == b"event: status\n"
-        request(base, method="DELETE", headers={"Origin": origin}, expected=204)
+        request(
+            base, method="DELETE",
+            headers={"Host": forwarded_host, "Origin": origin}, expected=403,
+        )
+        request(
+            base, method="DELETE",
+            headers={"Host": forwarded_host, "Origin": forwarded_origin}, expected=204,
+        )
         assert request("/api/v1/sessions") == {"sessions": []}
         child.send_signal(signal.SIGTERM)
         assert child.wait(timeout=5) == 0

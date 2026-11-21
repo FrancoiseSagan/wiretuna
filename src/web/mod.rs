@@ -15,7 +15,7 @@ use std::{
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, Request, State},
-    http::{HeaderValue, Method, StatusCode, header},
+    http::{HeaderValue, Method, StatusCode, header, uri::Authority},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{delete, get, post},
@@ -42,7 +42,7 @@ async fn serve(config: Config) -> io::Result<()> {
         .await
         .map_err(|error| io::Error::new(error.kind(), format!("binding {address}: {error}")))?;
     let address = listener.local_addr()?;
-    let service = Arc::new(Service::new(address.port()));
+    let service = Arc::new(Service::new());
     if let Some(path) = config.input {
         service
             .start_offline(path)
@@ -116,22 +116,26 @@ fn router(service: Arc<Service>) -> Router {
         .with_state(service)
 }
 
+fn is_loopback_authority(raw: &str) -> bool {
+    let Ok(authority) = raw.parse::<Authority>() else {
+        return false;
+    };
+    let host = authority.host();
+    !raw.contains('@')
+        && (host.eq_ignore_ascii_case("localhost") || matches!(host, "127.0.0.1" | "[::1]"))
+        && (raw == host || authority.port_u16().is_some())
+}
+
 async fn access(State(service): State<Arc<Service>>, request: Request, next: Next) -> Response {
     let host = request
         .headers()
         .get(header::HOST)
         .and_then(|value| value.to_str().ok());
-    let expected = format!("127.0.0.1:{}", service.port);
-    let alternative = format!("localhost:{}", service.port);
-    let Some(host) = host.filter(|host| {
-        *host == expected
-            || *host == alternative
-            || (service.port == 80 && matches!(*host, "127.0.0.1" | "localhost"))
-    }) else {
+    let Some(host) = host.filter(|host| is_loopback_authority(host)) else {
         return ApiError::new(
             StatusCode::FORBIDDEN,
             "invalid_host",
-            "Use the address printed by Wiretuna.",
+            "Use a loopback address to access Wiretuna.",
         )
         .into_response();
     };

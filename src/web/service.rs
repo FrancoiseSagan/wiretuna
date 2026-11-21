@@ -33,17 +33,15 @@ struct Registry {
 
 pub(super) struct Service {
     registry: Mutex<Registry>,
-    pub port: u16,
     pub subscriptions: Arc<Semaphore>,
     pub queries: Arc<Semaphore>,
     pub closing: AtomicBool,
 }
 
 impl Service {
-    pub fn new(port: u16) -> Self {
+    pub fn new() -> Self {
         Self {
             registry: Mutex::default(),
-            port,
             subscriptions: Arc::new(Semaphore::new(8)),
             queries: Arc::new(Semaphore::new(12)),
             closing: AtomicBool::new(false),
