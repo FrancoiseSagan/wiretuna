@@ -165,7 +165,8 @@ tr.spacer td { padding: 0; border: none; height: 0; }
 .flow-panel h3 { margin: 0; padding: .6rem .72rem; color: var(--muted); font-size: .84rem; border-bottom: 1px solid var(--line); }
 #flow-caption:not(:empty) { margin-top: .32rem; font-size: .8rem; overflow-wrap: anywhere; }
 .flow-toolbar { min-height: 0; }
-.flow-toolbar [aria-pressed="true"] { color: var(--accent); border-color: var(--edge-strong); background: var(--selected); }
+.flow-toolbar .button-group { flex-wrap: wrap; }
+.flow-toolbar [aria-pressed="true"], .http-transaction [aria-pressed="true"] { color: var(--accent); border-color: var(--edge-strong); background: var(--selected); }
 .flow-subview { padding: .72rem .8rem .85rem; }
 .sub-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; color: var(--muted); font-size: .86rem; }
 .sub-toolbar select { width: max-content; max-width: 100%; }

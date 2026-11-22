@@ -170,6 +170,7 @@ impl<'a> Parser<'a> {
             "icmp" => Some(Protocol::Icmp),
             "icmpv6" => Some(Protocol::Icmpv6),
             "dns" => Some(Protocol::Dns),
+            "quic" => Some(Protocol::Quic),
             _ => None,
         };
         if let Some(protocol) = protocol {

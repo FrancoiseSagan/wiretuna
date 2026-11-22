@@ -73,6 +73,16 @@ TCP bytes up to the first gap in each direction. Each message links to the
 packet containing its start. TLS details include visible server names, ALPN,
 versions and cipher suites.
 
+The HTTP/2 tab shows cleartext traffic that starts with a captured connection
+preface, including legacy h2c upgrades. Select a stream ID to see its frames,
+request pseudo-headers, response statuses and source packets. Stream 0 shows
+connection control frames. DATA entries show the captured data length.
+
+Use the packet display filter `quic` to inspect QUIC v1 and v2 long headers,
+including coalesced packets, connection IDs and visible length fields.
+Version Negotiation and unfamiliar versions are identified on UDP port 443.
+QUIC short headers stay in the UDP view when connection context is unavailable.
+
 ### Release build with live capture
 
 On Linux, build both programs with
@@ -87,8 +97,8 @@ the service.
 
 The Web view retains a bounded packet window and bounded TCP stream data.
 The `inspect` command traverses the entire classic pcap file. HTTP analysis
-covers plaintext HTTP/1.1. Encrypted traffic remains available in the packet
-and TCP views as captured bytes.
+covers plaintext HTTP/1.1 and HTTP/2. Encrypted payloads are available in the
+packet and TCP views as captured bytes.
 
 The Linux CI runs the Rust tests with and without live capture and runs the
 offline Web smoke test against the built executable.

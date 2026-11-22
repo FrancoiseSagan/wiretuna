@@ -129,6 +129,7 @@
               <div class="button-group" aria-label="连接详情视图">
                 <button type="button" id="show-stream" aria-pressed="true">字节流</button>
                 <button type="button" id="show-http" aria-pressed="false">HTTP/1.1</button>
+                <button type="button" id="show-http2" aria-pressed="false">HTTP/2</button>
                 <button type="button" id="show-protocols" aria-pressed="false">DNS / TLS</button>
               </div>
               <button type="button" id="refresh-detail">刷新详情</button>
@@ -160,6 +161,20 @@
                   <div class="panel-footer"><span id="http-offset"></span><div class="button-group"><button id="http-prev" type="button" disabled>上一页</button><button id="http-next" type="button" disabled>下一页</button></div></div>
                 </div>
                 <div class="sub-panel"><h3>消息详情</h3><div id="http-detail" class="http-detail"></div></div>
+              </div>
+            </section>
+            <section id="http2-view" class="flow-subview" aria-label="明文 HTTP/2" hidden>
+              <p class="sub-note" id="http2-note" role="status"></p>
+              <div id="http2-content" hidden>
+                <div class="sub-toolbar">
+                  <label for="http2-stream">流</label>
+                  <select id="http2-stream"></select>
+                </div>
+                <p class="sub-note" id="http2-exchange"></p>
+                <div class="stream-grid">
+                  <div class="sub-panel"><h3>帧列表</h3><div id="http2-frames" class="http-messages"></div></div>
+                  <div class="sub-panel"><h3>帧详情</h3><div id="http2-frame-detail" class="http-detail"></div></div>
+                </div>
               </div>
             </section>
             <section id="protocols-view" class="flow-subview" aria-label="TCP DNS 与 TLS" hidden>

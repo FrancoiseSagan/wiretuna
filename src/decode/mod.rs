@@ -2,9 +2,11 @@
 
 mod dns;
 pub mod http1;
+pub mod http2;
 mod ip;
 mod link;
 pub mod protocols;
+mod quic;
 mod stream;
 mod tls;
 mod transport;
@@ -28,6 +30,7 @@ pub enum Protocol {
     Icmp,
     Icmpv6,
     Dns,
+    Quic,
 }
 
 impl Protocol {
@@ -45,6 +48,7 @@ impl Protocol {
             Self::Icmp => "ICMP",
             Self::Icmpv6 => "ICMPv6",
             Self::Dns => "DNS",
+            Self::Quic => "QUIC",
         }
     }
 }

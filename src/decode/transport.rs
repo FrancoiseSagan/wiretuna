@@ -82,10 +82,26 @@ impl Decoder {
         self.field("udp.len", len, offset + 4, 2);
         if len < 8 {
             self.issue("invalid UDP length");
-        } else if len > bytes.len() && !self.summary.fragmented {
+            return;
+        }
+        if self.summary.fragmented {
+            return;
+        }
+        if len > bytes.len() {
             self.issue("incomplete UDP payload");
-        } else if !self.summary.fragmented && (source == 53 || destination == 53) {
-            self.dns(&bytes[8..len], offset + 8);
+        }
+        let payload = &bytes[8..len.min(bytes.len())];
+        if source == 53 || destination == 53 {
+            if len <= bytes.len() {
+                self.dns(payload, offset + 8);
+            }
+        } else {
+            self.quic(
+                payload,
+                offset + 8,
+                len - 8,
+                source == 443 || destination == 443,
+            );
         }
     }
 }

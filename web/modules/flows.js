@@ -1,10 +1,12 @@
 import { json, query, sessionPath } from './api.js';
 import { byId, el, utc } from './dom.js';
 import { HttpView } from './flow-http.js';
+import { Http2View } from './flow-http2.js';
 import { ProtocolView } from './flow-protocols.js';
 import { StreamView } from './flow-stream.js';
 
 const PAGE_SIZE = 100;
+const VIEWS = ['stream', 'http', 'http2', 'protocols'];
 const states = {
   handshake: '握手中', established: '已建立', observed: '中途捕获',
   'half closed': '半关闭', closed: '已关闭', reset: '已重置',
@@ -16,6 +18,7 @@ export class FlowList {
     this.onPacketFilter = onPacketFilter;
     this.stream = new StreamView({ onError, onPacket });
     this.http = new HttpView({ onError, onPacket });
+    this.http2 = new Http2View({ onError, onPacket });
     this.protocols = new ProtocolView({ onError, onPacket });
     this.rows = byId('flow-list');
     this.serial = 0;
@@ -31,7 +34,7 @@ export class FlowList {
       this.history.push(this.start);
       this.load(this.cursor);
     });
-    for (const view of ['stream', 'http', 'protocols']) {
+    for (const view of VIEWS) {
       byId(`show-${view}`).addEventListener('click', () => this.show(view));
     }
     byId('flow-packets').addEventListener('click', () => {
@@ -70,9 +73,7 @@ export class FlowList {
     this.selection++;
     this.selected = null;
     this.flow = null;
-    this.stream.reset();
-    this.http.reset();
-    this.protocols.reset();
+    for (const view of VIEWS) this[view].reset();
     byId('flow-packets').hidden = true;
     byId('flow-prompt').hidden = false;
     byId('flow-details').hidden = true;
@@ -138,9 +139,7 @@ export class FlowList {
       const time = flow.first_time ? ` · ${utc(flow.first_time)}–${utc(flow.last_time)} UTC` : '';
       const note = flow.missing_start ? ' · 起点未捕获' : '';
       byId('flow-caption').textContent = `#${id} · ${sides.join(' · ')}${time}${note}`;
-      this.stream.reset();
-      this.http.reset();
-      this.protocols.reset();
+      for (const view of VIEWS) this[view].reset();
       this.show(this.view);
     } catch (error) {
       if (serial === this.selection) this.onError(error.message);
@@ -150,7 +149,7 @@ export class FlowList {
   show(view) {
     if (!this.flow) return;
     this.view = view;
-    for (const name of ['stream', 'http', 'protocols']) {
+    for (const name of VIEWS) {
       const selected = name === view;
       byId(`show-${name}`).setAttribute('aria-pressed', String(selected));
       byId(`${name}-view`).hidden = !selected;

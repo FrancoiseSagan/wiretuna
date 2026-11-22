@@ -278,6 +278,62 @@ impl<'a> Reader<'a> {
     }
 }
 
+/// The HTTP/1.1 exchange when both peers agree to upgrade to h2c.
+pub(super) fn h2c_upgrade(client: &Prefix, server: &Prefix) -> Option<(Message, usize, usize)> {
+    if !looks_like_request(client) {
+        return None;
+    }
+    let mut requests = Reader::new(0, client, None);
+    let mut responses = Reader::new(1, server, None);
+    for _ in 0..MAX_TRANSACTIONS {
+        let request = requests.read(Kind::Request)?;
+        if request.issue.is_some() {
+            return None;
+        }
+        let response = final_response(&mut responses, request.method.as_deref()?)?;
+        let status = response.status?;
+        if status == 101 {
+            let settings = request
+                .headers
+                .iter()
+                .filter(|header| header.name.eq_ignore_ascii_case("HTTP2-Settings"))
+                .count();
+            return (has_token(&request, "Upgrade", "h2c")
+                && has_token(&request, "Connection", "Upgrade")
+                && has_token(&request, "Connection", "HTTP2-Settings")
+                && settings == 1
+                && has_token(&response, "Upgrade", "h2c")
+                && has_token(&response, "Connection", "Upgrade"))
+            .then_some((request, requests.position, responses.position));
+        }
+        if request.method.as_deref() == Some("CONNECT") && (200..300).contains(&status) {
+            return None;
+        }
+    }
+    None
+}
+
+fn final_response(reader: &mut Reader<'_>, method: &str) -> Option<Message> {
+    for _ in 0..=MAX_INFORMATIONAL {
+        let response = reader.read(Kind::Response(Some(method)))?;
+        match response.status? {
+            100 | 102..=199 => {}
+            _ if response.issue.is_none() => return Some(response),
+            _ => return None,
+        }
+    }
+    None
+}
+
+fn has_token(message: &Message, name: &str, value: &str) -> bool {
+    message
+        .headers
+        .iter()
+        .filter(|header| header.name.eq_ignore_ascii_case(name))
+        .flat_map(|header| header.value.split(','))
+        .any(|item| item.trim().eq_ignore_ascii_case(value))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
